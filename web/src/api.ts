@@ -109,6 +109,6 @@ export interface NewsReport { fetched: number; not_modified: number; skipped: nu
 
 export const newsApi = {
   list: (opts: { scope?: string; since?: string; all?: boolean; limit?: number }) =>
-    req<NewsView>("GET", `/api/news?scope=${encodeURIComponent(opts.scope ?? "")}&since=${encodeURIComponent(opts.since ?? "7d")}&limit=${opts.limit ?? 60}${opts.all ? "&all=1" : ""}`),
+    req<NewsView>("GET", `/api/news?scope=${encodeURIComponent(opts.scope ?? "")}&since=${encodeURIComponent(opts.since ?? "30d")}&limit=${opts.limit ?? 60}${opts.all ? "&all=1" : ""}`),
   fetch: () => req<NewsReport>("POST", "/api/news/fetch"),
 };
