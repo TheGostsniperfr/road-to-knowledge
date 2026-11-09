@@ -18,7 +18,7 @@ issue body.
 ## V2
 
 - [ ] V2-01 Mobile: PWA, public HTTPS (Tailscale Funnel or Cloudflare Tunnel), OAuth 2.1, Claude mobile connector
-- [ ] V2-02 Semantic view from local embeddings (Ollama), `neighbors()` tool
+- [x] V2-02 Semantic view from local embeddings (Ollama), `neighbors()` tool
 - [x] V2-03 Anki: import `.apkg`, export with stable GUIDs, AnkiConnect
 - [x] V2-04 Books: `book-ingest` skill, PDFs in MinIO, "à retenir" fiches
 - [x] V2-05 Discovery: frontier suggestions with the per-theme budget, `frontier()` tool
