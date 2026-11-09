@@ -43,11 +43,15 @@ type FrontierView struct {
 // known subjects anchor the frontier; a level-0 subject marked acquired is not something to build on.
 func isKnown(s *kb.Star) bool { return s.Level >= 3 || (s.State == kb.StateAcquired && s.Level > 0) }
 
-func isCandidate(s *kb.Star) bool { return s.State == kb.StateIdea || s.State == kb.StateExplore }
+// A mastered subject left in idea or explore by hand is never suggested.
+func isCandidate(s *kb.Star) bool {
+	return (s.State == kb.StateIdea || s.State == kb.StateExplore) && s.Level < 3
+}
 
 // Frontier ranks what to learn next around a scope (empty for the universe, a galaxy id or a cluster id).
-// Near and two-hop suggestions come from the scope; off-piste ones from one level above it, so a cluster
-// scope can point to a neighbouring cluster and a galaxy scope to another galaxy.
+// Near and two-hop suggestions come from the scope. Off-piste ones are subjects with no known neighbour:
+// those of the scope itself, and those one level above it, so a cluster scope can point to a
+// neighbouring cluster and a galaxy scope to another galaxy.
 func Frontier(u *kb.Universe, scope string, limit int) (FrontierView, error) {
 	if limit <= 0 {
 		limit = DefaultFrontierLimit
@@ -79,7 +83,11 @@ func Frontier(u *kb.Universe, scope string, limit int) (FrontierView, error) {
 		}
 		cov := coverage(s.Cluster)
 		sg.Bucket, sg.score = BucketOffPiste, 1-cov
-		sg.Reason = fmt.Sprintf("%s (%s), exploré à %d %%", s.Cluster.Name, s.Cluster.Galaxy.Name, int(math.Round(cov*100)))
+		if inScope(s) && scope != "" {
+			sg.Reason = fmt.Sprintf("terrain neuf dans %s, rien d'acquis autour", s.Cluster.Name)
+		} else {
+			sg.Reason = fmt.Sprintf("%s (%s), exploré à %d %%", s.Cluster.Name, s.Cluster.Galaxy.Name, int(math.Round(cov*100)))
+		}
 		offPiste = append(offPiste, sg)
 	}
 
@@ -189,7 +197,10 @@ func averageBudget(gs []*kb.Galaxy) kb.Discovery {
 
 // split shares n slots by weight with the largest remainder method, so 9 slots at 60/30/10 give 5/3/1.
 func split(n int, weights []int) []int {
-	total := sum(weights)
+	total := 0
+	for _, w := range weights {
+		total += max(w, 0)
+	}
 	out := make([]int, len(weights))
 	if total <= 0 {
 		out[0] = n
@@ -202,6 +213,7 @@ func split(n int, weights []int) []int {
 	var rs []rem
 	used := 0
 	for i, w := range weights {
+		w = max(w, 0)
 		exact := float64(n) * float64(w) / float64(total)
 		out[i] = int(exact)
 		used += out[i]
@@ -283,7 +295,8 @@ func twoHopReason(u *kb.Universe, s *kb.Star) (string, float64, bool) {
 			if k == s {
 				continue
 			}
-			if bestKnown == nil || k.Level > bestKnown.Level || (k.Level == bestKnown.Level && k.Name+via.Name < bestKnown.Name+bestVia.Name) {
+			if bestKnown == nil || k.Level > bestKnown.Level ||
+				(k.Level == bestKnown.Level && (k.Name < bestKnown.Name || (k.Name == bestKnown.Name && via.Name < bestVia.Name))) {
 				bestKnown, bestVia = k, via
 			}
 		}

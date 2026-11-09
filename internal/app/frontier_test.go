@@ -69,7 +69,8 @@ func TestFrontier_ExplainsEachBucketInFrench(t *testing.T) {
 		{"a linked subject names the known one", "tech/k8s/runwasi", "lié à gVisor que tu maîtrises"},
 		{"a cluster mate names its neighbour", "tech/k8s/kata", "dans k8s, à côté de gVisor que tu maîtrises"},
 		{"a two hop subject names the path", "tech/wasm/wasm", "à deux pas de gVisor, via runwasi"},
-		{"an off-piste subject gives its cluster coverage", "tech/reseau/ebpf", "reseau (Tech), exploré à 0 %"},
+		{"an unconnected subject of the scope says nothing known is around", "tech/reseau/ebpf", "terrain neuf dans reseau, rien d'acquis autour"},
+		{"an off-piste subject outside the scope gives its cluster coverage", "art/peinture/aquarelle", "peinture (art), exploré à 0 %"},
 	}
 	u := universe(t, sample)
 	f, err := app.Frontier(u, "tech", 20)
@@ -151,6 +152,18 @@ func TestFrontier_NeverSuggestsKnownOrInProgressSubjects(t *testing.T) {
 	got := ids(f)
 	assert.NotContains(t, got, "tech/k8s/gvisor")
 	assert.NotContains(t, got, "tech/reseau/cilium")
+}
+
+func TestFrontier_NeverSuggestsMasteredSubjects_WhenStateWasLeftAtExplore(t *testing.T) {
+	u := universe(t, map[string]string{
+		"galaxies/g/a/done.md": "---\nname: Done\nlevel: 4\nstate: explore\n---\n",
+		"galaxies/g/a/next.md": "---\nname: Next\nlevel: 0\n---\n",
+	})
+
+	f, err := app.Frontier(u, "", 9)
+
+	require.NoError(t, err)
+	assert.Equal(t, map[string]app.Bucket{"g/a/next": app.BucketNear}, ids(f))
 }
 
 func TestFrontier_ReturnsNotFound_WhenScopeIsUnknown(t *testing.T) {
