@@ -81,6 +81,43 @@ func TestParse_StripsHTMLAndEntitiesFromTitlesAndSummaries(t *testing.T) {
 	assert.Equal(t, "New eBPF datapath features.", entries[0].Summary)
 }
 
+func TestParse_KeepsTheItemLink_WhenTheItemAlsoHasAnAtomSelfLink(t *testing.T) {
+	doc := `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>x</title>
+<item><title>Both links</title><atom:link rel="self" href="https://example.com/self"/><link>https://example.com/post</link></item>
+</channel></rss>`
+
+	_, entries, err := news.Parse(strings.NewReader(doc), nil)
+
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "https://example.com/post", entries[0].Link)
+}
+
+func TestParse_DecodesLatin1AndWindows1252Feeds(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		charset string
+		raw     []byte
+		want    string
+	}{
+		{"ISO-8859-1", "ISO-8859-1", []byte{'C', 'a', 'f', 0xe9}, "Café"},
+		{"Windows-1252 smart quotes and euro", "windows-1252", []byte{0x93, '5', ' ', 0x80, 0x94}, "“5 €”"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			doc := append([]byte(`<?xml version="1.0" encoding="`+tt.charset+`"?><rss version="2.0"><channel><title>x</title><item><title>`), tt.raw...)
+			doc = append(doc, []byte(`</title><link>https://example.com/a</link></item></channel></rss>`)...)
+
+			_, entries, err := news.Parse(strings.NewReader(string(doc)), nil)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, entries[0].Title)
+		})
+	}
+}
+
 func TestParse_RejectsAnHTMLPage(t *testing.T) {
 	_, _, err := news.Parse(strings.NewReader("<html><body>nope</body></html>"), nil)
 
@@ -148,6 +185,37 @@ func TestRun_BacksOffAFailingFeed(t *testing.T) {
 	assert.Equal(t, 1, later.Failed)
 	assert.Equal(t, int32(2), hits.Load())
 	assert.Equal(t, 2, st.Feeds()[0].Failures)
+}
+
+func TestRun_DoesNotBackOff_WhenTheFetchIsCancelled(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+	st, _ := news.Open(t.TempDir())
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	rep, _ := fetcher(&clock{time.Now()}).Run(ctx, st, []news.Feed{{URL: srv.URL}})
+
+	assert.Equal(t, 0, rep.Failed)
+	assert.Equal(t, 0, st.Feeds()[0].Failures)
+	assert.True(t, st.Feeds()[0].NextTry.IsZero())
+}
+
+func TestRun_DoesNotCountArchiveItemsAsNew(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(rss))
+	}))
+	defer srv.Close()
+	st, _ := news.Open(t.TempDir())
+	c := &clock{time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC)}
+
+	rep, err := fetcher(c).Run(context.Background(), st, []news.Feed{{URL: srv.URL}})
+
+	require.NoError(t, err)
+	assert.Equal(t, 0, rep.NewItems)
+	assert.Empty(t, st.Items())
 }
 
 func TestRun_RefusesARedirectToAFileURL(t *testing.T) {

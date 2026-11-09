@@ -236,6 +236,12 @@ func (f *Fetcher) Run(ctx context.Context, st *Store, feeds []Feed) (Report, err
 	for r := range results {
 		st.mu.Lock()
 		fs := st.feeds[r.feed.URL]
+		if r.err != nil && ctx.Err() != nil {
+			// Cancelled by us (Ctrl-C, closed request): not the feed's fault, no backoff.
+			rep.Skipped++
+			st.mu.Unlock()
+			continue
+		}
 		if r.err != nil {
 			fs.Failures++
 			fs.Error = r.err.Error()
@@ -266,6 +272,11 @@ func (f *Fetcher) Run(ctx context.Context, st *Store, feeds []Feed) (Report, err
 			pub := e.Published
 			if pub.IsZero() || pub.After(now) {
 				pub = now
+			}
+			// A feed that carries years of archive must not report them as new, only for the
+			// prune below to drop them again.
+			if now.Sub(pub) > f.Retain {
+				continue
 			}
 			st.items = append(st.items, Item{ID: id, Feed: r.feed.URL, Source: r.feed.Name, Scope: r.feed.Scope, Title: e.Title, Link: e.Link, Summary: e.Summary, Published: pub, Fetched: now})
 			rep.NewItems++
