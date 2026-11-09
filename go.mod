@@ -4,6 +4,7 @@ go 1.26.5
 
 require (
 	github.com/fsnotify/fsnotify v1.10.1
+	github.com/klauspost/compress v1.20.3
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/open-spaced-repetition/go-fsrs/v3 v3.3.1
 	github.com/stretchr/testify v1.12.1
