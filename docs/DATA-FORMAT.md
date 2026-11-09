@@ -164,9 +164,11 @@ history and editing the question starts a new card. Ratings: 1 again, 2 hard, 3 
 ```
 
 A line without `:` renames a subject, sub-theme or theme; a card id follows its subject. A
-line with `:` moves one card, written when a split takes a notion to a new subject. A review
-follows every rename at or after its own time, in time order, so its history lands on the
-card's id of today. The same log redirects old ids in the API, the MCP tools and deep links.
+line with `:` moves one card, written when a split takes a notion to a new subject. Renames
+are replayed in time order. A review of an id that no longer exists follows every rename; a
+review of an id that exists again (moved back, or reused by a new subject) follows only the
+renames after it was written. The same log redirects old ids in the API, the MCP tools and deep
+links, never an id that exists today.
 
 | Operation | Files | Rename lines |
 |---|---|---|

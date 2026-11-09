@@ -73,7 +73,7 @@ number of themes, not with the size of fiches, except `fragments`.
 | `inbox` | read | ~30 tokens per note | `inbox()` |
 | `capture` | writes `inbox/` | ~10 tokens | `capture(text: "…", source: "claude-code")` |
 | `propose` | writes `proposals/<slug>` | ~15 tokens | `propose(slug: "fiche-keigo", message: "feat(japonais): keigo", files: [{path, content}])` |
-| `restructure` | writes `proposals/<slug>` | ~80 tokens (plan) | `restructure(kind: "split", id: "…/kana", parts: [{id: "katakana", notions: ["Katakana"]}], dry_run: true)`; also `kind: "move"` (`id`, `to`, `name`) and `kind: "merge"` (`sources`, `into`) |
+| `restructure` | writes `proposals/<slug>` | ~80 tokens (plan) | `restructure(kind: "split", id: "…/kana", parts: [{id: "katakana", notions: ["Katakana"]}], dry_run: true)`; also `kind: "move"` (`id`, `to`, `name`) and `kind: "merge"` (`sources`, `into`). An existing `proposals/<slug>` is refused; leave `slug` empty for a unique one |
 
 The server instructions tell the agent the order: `profile` first, then `search` or
 `subgraph`, then `node`, and `fragments` only when the brief is not enough.

@@ -19,8 +19,7 @@ other subjects, and breaks bookmarks and inbox notes that name the old id.
    merged subject must be collected from several files.
 3. **An append-only rename log**, `review/renames.jsonl`, with one line per id change
    (`{"from","to","at"}`), for subjects, sub-themes and single cards. The review log is
-   replayed through it: a review written at time t follows every rename at or after t, in
-   time order.
+   replayed through it, in time order.
 
 ## Decision
 
@@ -33,12 +32,17 @@ it handles every operation the same way:
 - **merge**: each absorbed subject gets a line to the target; the target keeps the
   highest level and the most advanced state of all sources (ADR-0003: a level never drops).
 
-Resolving with the review's own time, not a final map, is what makes round trips exact: a
-notion split out and merged back, or a subject moved away and back, ends where it is today,
-and a new subject that later reuses an old id keeps its own reviews.
+**Which reviews follow a rename.** An id that is gone from the files follows every rename
+whatever the time of the review. The `at` of a rename made by a proposal is the time the agent
+wrote it, not the time the user merged it; reviews of the old id in between, on this machine or
+another, must still follow. Time only decides for an id that is **live again** (a subject moved
+away and back, a notion split out and merged back, or a new subject that reuses an old id): its
+reviews from before the rename follow it, those written after belong to what lives there now.
 
-The same log serves redirects: `GET /api/star/<old id>`, `node`, `fragments`, `subgraph`,
-`neighbors` and the UI's deep links resolve an old id to the live one.
+**Redirects never touch a live id.** The same log serves `GET /api/star/<old id>`, `node`,
+`fragments`, `subgraph`, `neighbors`, a review sent with a stale card id, and the UI's deep
+links, but only for ids that no longer exist. A reused id always opens, and logs reviews for,
+the subject that has it today.
 
 Every operation is planned from the current files first (dry run), then applied:
 
@@ -46,10 +50,21 @@ Every operation is planned from the current files first (dry run), then applied:
   one commit, because the user asked for it;
 - from an agent (`restructure` MCP tool), on `proposals/<slug>` (ADR-0004). The server
   computes the moves and deletions; `propose` still refuses an agent's own deletes outside
-  `inbox/`, so a subject can only disappear by being merged into another.
+  `inbox/`, so a subject can only disappear by being merged into another. Each restructure
+  gets its own branch: an existing `proposals/<slug>` is refused rather than overwritten, and
+  the default slug carries a hash of the plan.
 
-Links in other subjects (full ids or bare slugs) are rewritten to the new ids in the same
-commit. Files are moved, not copied, so `git log --follow` keeps their history.
+Applying is all or nothing. Each file step records how to undo it; if a step, the rename log
+or the commit fails, the steps are undone in reverse and the index is reset, so the tree is as
+before. The rename log is appended only after every file step succeeded. The app sends back
+the hash of the plan it showed; if the files changed since, the apply is refused and the new
+plan is shown.
+
+Links in other subjects (full ids, bare slugs) and deep links in the text (`#/id`,
+`#/id#notion`) are rewritten in the same commit, including references to a notion a split or
+merge moved. A sub-theme a plan leaves without subjects keeps its folder through a
+`_cluster.md`, since git does not keep empty folders. Files are moved, not copied, so
+`git log --follow` keeps their history.
 
 ## Confirmation
 
@@ -57,5 +72,8 @@ commit. Files are moved, not copied, so `git log --follow` keeps their history.
 split, merge, merge into a new id, sub-theme move, and a split followed by a merge back;
 links are rewritten; old ids open the live subject; `git log --follow` sees both commits;
 collisions, unknown notions, targets outside `galaxies/` and conflicting answers are
-refused with nothing written. `internal/review/renames_test.go` covers the time-ordered
-resolution.
+refused with nothing written. `internal/app/restructure_safety_test.go`: a reused id is never
+redirected; reviews made between a proposal and its merge follow; a failure before any step,
+or of the commit, leaves the tree, the rename log and the history as they were; an emptied
+sub-theme is kept; deep links to a moved notion are rewritten; the plan shown is the plan
+applied. `internal/review/renames_test.go` covers the resolution rules.
