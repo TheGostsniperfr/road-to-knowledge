@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { api, type Bucket, type FrontierView, type Hit, type InboxItem, type UniverseView } from "../api";
+import { api, type Bucket, type FrontierView, type Hit, type InboxItem, type SemanticStatus, type UniverseView } from "../api";
 import type { SkyNode } from "../sky/engine";
 import { News } from "./News";
 import { useTerms } from "./terms";
@@ -13,7 +13,21 @@ export function Left({ universe, selected, go }: { universe: UniverseView | null
   const [tab, setTab] = useState<Tab>("plan");
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
+  const [sem, setSem] = useState<SemanticStatus | null>(null);
   const input = useRef<HTMLInputElement>(null);
+
+  // Indexing runs in the background after start; poll only until it settles.
+  useEffect(() => {
+    let live = true;
+    let timer = 0;
+    const poll = () => api.semantic().then((s) => {
+      if (!live) return;
+      setSem(s);
+      if (s.state === "loading" || s.state === "indexing") timer = window.setTimeout(poll, 2000);
+    }).catch(() => undefined);
+    poll();
+    return () => { live = false; clearTimeout(timer); };
+  }, [universe?.version]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -57,6 +71,7 @@ export function Left({ universe, selected, go }: { universe: UniverseView | null
         <input ref={input} type="search" placeholder="Rechercher (Ctrl K)" value={query} aria-label="Rechercher"
           onInput={(e) => { setQuery(e.currentTarget.value); setTab("plan"); }}
           onKeyDown={(e) => { if (e.key === "Enter" && hits[0]) go(hits[0].id); }} />
+        {query.trim().length > 0 && semLine(sem) && <small class="semstat">{semLine(sem)}</small>}
       </div>
       <div class="lbody">
         {tab === "plan" && (query.trim().length >= 2 ? <Hits hits={hits} go={go} /> : <Tree universe={universe} selId={selId} open={openPath} go={go} />)}
@@ -103,13 +118,24 @@ function Tree({ universe, selId, open, go }: { universe: UniverseView | null; se
   );
 }
 
+function semLine(s: SemanticStatus | null): string {
+  switch (s?.state) {
+    case "ready": return "Recherche par mots et par sens";
+    case "indexing": return `Recherche par sens : indexation ${s.total ? Math.round((100 * s.done) / s.total) : 0} %`;
+    case "loading": return "Recherche par sens : chargement du modèle";
+    case "missing": return "Recherche par sens : modèle absent (rtk models pull)";
+    case "error": return "Recherche par sens indisponible : mots seulement";
+    default: return "";
+  }
+}
+
 function Hits({ hits, go }: { hits: Hit[]; go: (id: string) => void }) {
   if (!hits.length) return <p class="empty">Rien trouvé.</p>;
   return (
     <div>
       {hits.map((h) => (
         <button key={h.id} class="hit" onClick={() => go(h.id)}>
-          <span>{h.name}</span>
+          <span>{h.name}{h.mode === "meaning" && <em class="bysense" title="Trouvé par le sens, sans mot en commun">sens</em>}</span>
           <small>{h.snippet.replace(/[\[\]]/g, "")}</small>
         </button>
       ))}

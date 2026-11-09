@@ -51,7 +51,9 @@ export interface StarView extends StarSummary {
 
 export interface Source { title: string; author?: string; year?: number; pages?: number; file?: string; url?: string; available: boolean }
 
-export interface Hit { id: string; name: string; snippet: string }
+export interface Hit { id: string; name: string; snippet: string; mode?: "words" | "meaning" | "both" }
+
+export interface SemanticStatus { state: "off" | "missing" | "loading" | "indexing" | "ready" | "error"; model?: string; done: number; total: number; message?: string }
 
 export interface DueCard { id: string; star: string; star_name: string; q: string; a: string; new: boolean; next: Record<string, string> }
 
@@ -88,6 +90,7 @@ export const api = {
   setGalaxy: (id: string, patch: { review_after_days?: number; discovery?: Discovery }) => req<GalaxyView>("PATCH", `/api/galaxy/${encodeURIComponent(id)}`, patch),
   setLayout: (galaxies: Record<string, Pin>) => req<UniverseView>("PUT", "/api/layout", { galaxies }),
   search: (q: string) => req<Hit[]>("GET", `/api/search?q=${encodeURIComponent(q)}`),
+  semantic: () => req<SemanticStatus>("GET", "/api/semantic"),
   due: (scope: string, exclude: string[]) => req<DueCard[]>("GET", `/api/review/due?scope=${encodeURIComponent(scope)}&exclude=${encodeURIComponent(exclude.join(","))}`),
   review: (card: string, rating: number) => req<void>("POST", "/api/review", { card, rating }),
   flush: (count: number) => req<void>("POST", "/api/review/flush", { count }),
