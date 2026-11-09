@@ -26,8 +26,8 @@ func CheckFeedURL(raw string) error {
 	return nil
 }
 
-func validSources(path string, in []Source, report func(path, format string, args ...any)) []Source {
-	var out []Source
+func validSources(path string, in []Feed, report func(path, format string, args ...any)) []Feed {
+	var out []Feed
 	seen := map[string]bool{}
 	for _, s := range in {
 		s.URL = strings.TrimSpace(s.URL)

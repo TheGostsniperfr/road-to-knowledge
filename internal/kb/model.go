@@ -42,8 +42,8 @@ func (d Discovery) Valid() bool {
 	return d.Near >= 0 && d.TwoHops >= 0 && d.OffPiste >= 0 && d.Near+d.TwoHops+d.OffPiste == 100
 }
 
-// Source is a news feed (RSS or Atom) the user follows for a theme or a sub-theme.
-type Source struct {
+// Feed is a news feed (RSS or Atom) the user follows for a theme or a sub-theme.
+type Feed struct {
 	URL  string `yaml:"url" json:"url"`
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 }
@@ -56,20 +56,20 @@ type Galaxy struct {
 	ReviewAfter int        `json:"review_after_days"`
 	Discovery   Discovery  `json:"discovery"`
 	Pin         *Pin       `json:"pin,omitempty"`
-	Sources     []Source   `json:"sources,omitempty"`
+	Sources     []Feed     `json:"sources,omitempty"`
 	Body        string     `json:"-"`
 	Path        string     `json:"-"`
 	Clusters    []*Cluster `json:"-"`
 }
 
 type Cluster struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Sources []Source `json:"sources,omitempty"`
-	Body    string   `json:"-"`
-	Path    string   `json:"-"`
-	Galaxy  *Galaxy  `json:"-"`
-	Stars   []*Star  `json:"-"`
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	Sources []Feed  `json:"sources,omitempty"`
+	Body    string  `json:"-"`
+	Path    string  `json:"-"`
+	Galaxy  *Galaxy `json:"-"`
+	Stars   []*Star `json:"-"`
 }
 
 type Planet struct {
