@@ -175,3 +175,9 @@ canvas.sky.drag { cursor: grabbing; }
 .grade button:hover { background: #18213a; }
 .grade button:focus-visible { outline: 2px solid var(--accent); }
 .kbd { font-family: var(--mono); font-size: .6rem; color: var(--muted); }
+.settings .field { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: .8rem; }
+.settings input[type="number"] { width: 64px; background: #0e1421; border: 1px solid var(--rule); border-radius: 5px; color: var(--ink); font-family: var(--mono); font-size: .74rem; padding: 4px 6px; }
+.settings .share { display: grid; grid-template-columns: 92px 1fr 42px; align-items: center; gap: 8px; font-size: .78rem; }
+.settings .share b { font-family: var(--mono); font-size: .7rem; font-weight: 400; text-align: right; }
+.settings input[type="range"], .settings input[type="checkbox"] { accent-color: var(--accent); }
+.settings input:focus-visible { outline: 2px solid var(--accent); }

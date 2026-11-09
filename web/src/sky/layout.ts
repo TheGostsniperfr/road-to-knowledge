@@ -137,7 +137,7 @@ export function buildLayout(u: UniverseView): Layout {
       R: 620 + 880 * Math.sqrt(mass / maxMass), m: 2, e: 0, kap: 0, bar: 0,
       tilt: 0.5 + R() * 0.28, ct: 0, st: 0, cp: 0, sp: 0, zt: 0, mass, seed: hash(gv.id), clusters: [], data: gv,
     };
-    const th = R() * TAU, phi = (R() - 0.5) * 1.2;
+    const rolled = R() * TAU, th = gv.pin?.rotation ?? rolled, phi = (R() - 0.5) * 1.2;
     // Real spirals: barred and grand-design ones have 2 arms, a few have 3 or 4. Sub-themes spread along the arms.
     if (gv.shape === "barred") Object.assign(g, { m: 2, e: 0.46, kap: 5.4, bar: 0.27 });
     if (gv.shape === "spiral") {
@@ -212,29 +212,46 @@ export function buildLayout(u: UniverseView): Layout {
 }
 
 // Biggest theme in the middle, the others around it on a golden-angle spiral, then pushed apart.
+// Pinned galaxies (layout.json) never move: only the new ones are placed and pushed away from them.
 function placeGalaxies(gs: GNode[]) {
   const order = [...gs].sort((a, b) => b.mass - a.mass || a.id.localeCompare(b.id));
+  const pinned = (g: GNode) => !!g.data.pin;
   order.forEach((g, i) => {
+    if (g.data.pin) {
+      g.x = g.data.pin.x;
+      g.y = g.data.pin.y;
+      return;
+    }
     const a = i * 2.39996 + 0.7, r = i === 0 ? 0 : 1900 * Math.sqrt(i);
     g.x = Math.cos(a) * r;
     g.y = Math.sin(a) * r * 0.8;
   });
+  const anyPinned = order.some(pinned);
   for (let it = 0; it < 80; it++) {
     for (let a = 0; a < order.length; a++) {
       for (let b = a + 1; b < order.length; b++) {
-        const A = order[a], B = order[b];
+        const A = order[a], B = order[b], pa = pinned(A), pb = pinned(B);
+        if (pa && pb) continue;
         const dx = B.x - A.x, dy = B.y - A.y, d = Math.hypot(dx, dy) || 1, min = (A.R + B.R) * 1.35;
         if (d < min) {
-          const p = (min - d) / 2 / d;
-          A.x -= dx * p; A.y -= dy * p; B.x += dx * p; B.y += dy * p;
+          const p = (min - d) / d / (pa || pb ? 1 : 2);
+          if (!pa) { A.x -= dx * p; A.y -= dy * p; }
+          if (!pb) { B.x += dx * p; B.y += dy * p; }
         }
       }
     }
+    // Pulling free galaxies to the origin would drag them into pinned ones; with pins the spiral slot is enough.
+    if (anyPinned) continue;
     for (const g of order.slice(1)) {
       g.x *= 0.985;
       g.y *= 0.985;
     }
   }
+}
+
+// Positions to write to layout.json so the map stays as it looks now.
+export function currentPins(l: Layout): Record<string, { x: number; y: number }> {
+  return Object.fromEntries(l.galaxies.map((g) => [g.id, { x: Math.round(g.x), y: Math.round(g.y) }]));
 }
 
 function separateClusters(cls: CNode[]) {

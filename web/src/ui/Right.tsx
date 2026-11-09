@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { api, type AIPreview, type State, type StarView, type UniverseView } from "../api";
+import { api, type AIPreview, type Discovery, type GalaxyView, type State, type StarView, type UniverseView } from "../api";
 import { renderMarkdown, renderMermaid, section } from "../markdown";
 import type { SkyNode } from "../sky/engine";
+import { buildLayout, currentPins } from "../sky/layout";
+import { SHARES, STEP, rebalance } from "./discovery";
 
 const LEVELS = ["Brouillard", "Entendu parler", "Compris", "Pratiqué en lab", "Maîtrisé en prod", "Je peux l'enseigner"];
 const STATES: [State, string][] = [["idea", "Idée"], ["explore", "À explorer"], ["progress", "En cours"], ["acquired", "Acquis"]];
@@ -34,6 +36,7 @@ function Fiche({ universe, selected, go, review }: { universe: UniverseView | nu
             <div class="row">{strongest.map((s) => <button key={s.id} class="btn ghost" onClick={() => go(s.id)}>{s.name}</button>)}</div>
           </div>
         )}
+        <PinMap universe={universe} />
         <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>Clique une galaxie pour y plonger. Les fiches sont des fichiers Markdown dans ton repo : écris-les dans ton éditeur, la carte se met à jour seule.</p>
       </>
     );
@@ -48,10 +51,7 @@ function Fiche({ universe, selected, go, review }: { universe: UniverseView | nu
         <div class="blk"><span class="k">Sous-thèmes</span>
           {g.clusters.map((c) => <button key={c.id} class="worm plain" onClick={() => go(c.id)}>{c.name}<small>{c.stars.length} sujets</small></button>)}
         </div>
-        <div class="blk"><span class="k">Réglages</span>
-          <p>À revoir après {g.review_after_days} jours sans révision. Découverte : {g.discovery.near} % proche, {g.discovery.two_hops} % à deux sauts, {g.discovery.off_piste} % hors-piste.</p>
-          <p class="file">Modifiable dans galaxies/{g.id}/_galaxy.md</p>
-        </div>
+        <GalaxySettings key={g.id + JSON.stringify([g.review_after_days, g.discovery])} g={g} />
       </>
     );
   }
@@ -75,6 +75,78 @@ function Fiche({ universe, selected, go, review }: { universe: UniverseView | nu
   }
   const starId = selected.kind === "planet" ? selected.star.id : selected.id;
   return <StarFiche id={starId} planet={selected.kind === "planet" ? selected.name : null} version={universe.version} go={go} review={review} />;
+}
+
+function PinMap({ universe }: { universe: UniverseView }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const free = universe.galaxies.filter((g) => !g.pin);
+  if (universe.galaxies.length === 0) return null;
+  const pin = async () => {
+    setBusy(true);
+    try {
+      await api.setLayout(currentPins(buildLayout(universe)));
+      setErr("");
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div class="blk"><span class="k">Carte</span>
+      {free.length === 0
+        ? <p>Carte figée : une nouvelle galaxie se place autour des autres sans les déplacer.</p>
+        : free.length === universe.galaxies.length
+          ? <p>Les galaxies sont placées automatiquement et bougent un peu quand un thème apparaît. Fige-les pour garder tes repères.</p>
+          : <p>{free.length} galaxie{free.length > 1 ? "s" : ""} pas encore figée{free.length > 1 ? "s" : ""} : {free.map((g) => g.name).join(", ")}.</p>}
+      {free.length > 0 && <button class="btn ghost" disabled={busy} onClick={pin}>Figer la carte</button>}
+      {err && <p class="file">{err}</p>}
+      <p class="file">Positions dans layout.json, à la racine du repo.</p>
+    </div>
+  );
+}
+
+function GalaxySettings({ g }: { g: GalaxyView }) {
+  const [disc, setDisc] = useState<Discovery>(g.discovery);
+  const [days, setDays] = useState(g.review_after_days);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const dirty = days !== g.review_after_days || SHARES.some(([k]) => disc[k] !== g.discovery[k]) || disc.news !== g.discovery.news;
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.setGalaxy(g.id, { review_after_days: days, discovery: disc });
+      setErr("");
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div class="blk settings"><span class="k">Réglages</span>
+      <label class="field">À revoir après
+        <input type="number" min={1} max={3650} value={days} onInput={(e) => setDays(Math.max(1, Math.min(3650, Number((e.target as HTMLInputElement).value) || 1)))} /> jours sans révision
+      </label>
+      <span class="k">Découverte</span>
+      {SHARES.map(([k, label]) => (
+        <label key={k} class="share">
+          <span>{label}</span>
+          <input type="range" min={0} max={100} step={STEP} value={disc[k]} aria-label={`${label}, en pourcentage`}
+            onInput={(e) => setDisc(rebalance(disc, k, Number((e.target as HTMLInputElement).value)))} />
+          <b>{disc[k]} %</b>
+        </label>
+      ))}
+      <label class="field"><input type="checkbox" checked={disc.news} onChange={(e) => setDisc({ ...disc, news: (e.target as HTMLInputElement).checked })} /> Inclure l'actualité du thème</label>
+      <div class="row">
+        <button class="btn" disabled={!dirty || busy} onClick={save}>Enregistrer</button>
+        {dirty && <button class="btn ghost" onClick={() => { setDisc(g.discovery); setDays(g.review_after_days); }}>Annuler</button>}
+      </div>
+      {err && <p class="file">{err}</p>}
+      <p class="file">Écrit dans galaxies/{g.id}/_galaxy.md</p>
+    </div>
+  );
 }
 
 function StarFiche({ id, planet, version, go, review }: { id: string; planet: string | null; version: number; go: (id: string) => void; review: () => void }) {
