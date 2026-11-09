@@ -134,6 +134,19 @@ func TestValidAssetPath_RejectsEscapesAndActiveFormats(t *testing.T) {
 	}
 }
 
+func TestDirty_ListsOnlyGivenPathsWithUncommittedChanges(t *testing.T) {
+	dir := gitRepo(t)
+	r := gitx.Open(context.Background(), dir)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "inbox"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "inbox/a.md"), []byte("a"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "inbox/b.md"), []byte("b"), 0o644))
+
+	dirty, err := r.Dirty(context.Background(), "inbox/a.md", "inbox/missing.md")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"inbox/a.md"}, dirty)
+}
+
 func TestPropose_WritesBinaryAssetOnBranch(t *testing.T) {
 	dir := gitRepo(t)
 	r := gitx.Open(context.Background(), dir)
