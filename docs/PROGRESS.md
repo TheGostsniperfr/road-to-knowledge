@@ -14,6 +14,17 @@ what changed, what is open, where the next session starts.
 
 ## Log
 
+### 2026-11-09 · V2-05 discovery frontier
+
+- `app.Frontier`: ranks `idea`/`explore` subjects for a scope into near, two hops and off
+  piste, following the galaxy's `discovery` budget, with a French reason per suggestion.
+  At universe and galaxy scope it alternates themes so one dense theme cannot fill the list.
+- Exposed as `GET /api/frontier` and the MCP tool `frontier(scope, limit)`.
+- "À explorer" tab: scope chips (universe, galaxy, sub-theme of the selection), groups per
+  bucket with their budget, then subjects in progress.
+- Open: the seeded repo has few links on fog subjects, so `two_hops` is often empty there;
+  adding `links:` to fog subjects makes the suggestions better.
+
 ### 2026-11-09 · V1
 
 - V1-00 to V1-07 built in one session from the validated design artifact (v4.4).

@@ -21,7 +21,7 @@ MCP, without loading everything.
 - **Never forgets for you**: a level never drops on its own. A subject not reviewed for
   longer than its theme allows only gets an amber dot.
 - **AI-ready**: `rtk mcp` exposes `profile`, `subgraph`, `node`, `fragments`, `search`,
-  `capture` and `propose`. Agents write to `inbox/` or to a `proposals/*` branch, never
+  `frontier`, `capture` and `propose`. Agents write to `inbox/` or to a `proposals/*` branch, never
   to your main branch. The "Ce que l'IA reçoit" tab shows exactly what an agent gets.
 
 ## Quick start
