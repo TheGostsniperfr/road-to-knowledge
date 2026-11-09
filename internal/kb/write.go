@@ -16,14 +16,23 @@ func SetFields(path string, fields map[string]any) error {
 	if err != nil {
 		return fmt.Errorf("set fields: %w", err)
 	}
+	res, err := SetFieldsBytes(src, fields)
+	if err != nil {
+		return fmt.Errorf("set fields %s: %w", path, err)
+	}
+	return writeAtomic(path, res)
+}
+
+// SetFieldsBytes is SetFields on file contents, for edits planned before anything is written.
+func SetFieldsBytes(src []byte, fields map[string]any) ([]byte, error) {
 	front, body, err := splitFrontmatter(src)
 	if err != nil && err != errNoFrontmatter {
-		return fmt.Errorf("set fields %s: %w", path, err)
+		return nil, err
 	}
 	var doc yaml.Node
 	if len(bytes.TrimSpace(front)) > 0 {
 		if err := yaml.Unmarshal(front, &doc); err != nil {
-			return fmt.Errorf("set fields %s: %w", path, err)
+			return nil, err
 		}
 	}
 	if doc.Kind == 0 {
@@ -33,7 +42,7 @@ func SetFields(path string, fields map[string]any) error {
 	for _, key := range sortedKeys(fields) {
 		var v yaml.Node
 		if err := v.Encode(fields[key]); err != nil {
-			return fmt.Errorf("set fields: encode %s: %w", key, err)
+			return nil, fmt.Errorf("encode %s: %w", key, err)
 		}
 		if v.Kind == yaml.MappingNode {
 			v.Style = yaml.FlowStyle
@@ -41,6 +50,10 @@ func SetFields(path string, fields map[string]any) error {
 		set := false
 		for i := 0; i+1 < len(m.Content); i += 2 {
 			if m.Content[i].Value == key {
+				// Keep the file's own style: links: [a, b] stays on one line when rewritten.
+				if v.Kind == yaml.SequenceNode && m.Content[i+1].Style&yaml.FlowStyle != 0 {
+					v.Style = yaml.FlowStyle
+				}
 				m.Content[i+1] = &v
 				set = true
 				break
@@ -54,14 +67,25 @@ func SetFields(path string, fields map[string]any) error {
 	enc := yaml.NewEncoder(&out)
 	enc.SetIndent(2)
 	if err := enc.Encode(&doc); err != nil {
-		return fmt.Errorf("set fields: encode: %w", err)
+		return nil, fmt.Errorf("encode: %w", err)
 	}
 	enc.Close()
 	res := append([]byte("---\n"), out.Bytes()...)
 	res = append(res, []byte("---\n")...)
-	res = append(res, body...)
-	return writeAtomic(path, res)
+	return append(res, body...), nil
 }
+
+// SplitFile separates the frontmatter from the body; a file without frontmatter is all body.
+func SplitFile(src []byte) (front, body []byte, err error) {
+	front, body, err = splitFrontmatter(src)
+	if err == errNoFrontmatter {
+		return nil, body, nil
+	}
+	return front, body, err
+}
+
+// WriteFile writes atomically, for callers outside the package that rewrite whole files.
+func WriteFile(path string, data []byte) error { return writeAtomic(path, data) }
 
 // writeAtomic uses a unique temp file in the same directory, so concurrent writers never share it
 // and the rename stays on one filesystem.
