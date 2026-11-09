@@ -108,6 +108,18 @@ func TestLoad_ReportsProblem_WhenLevelIsOutOfRange(t *testing.T) {
 	assert.Equal(t, 5, u.Star("lang/japonais/keigo").Level)
 }
 
+func TestLoad_ReportsProblem_WhenDiscoveryIsNegative(t *testing.T) {
+	root := fixture(t)
+	writeFile(t, root, "galaxies/lang/_galaxy.md", "---\nname: Langues\ndiscovery: { near: 120, two_hops: 0, off_piste: -20 }\n---\n")
+
+	u, problems, err := kb.Load(root)
+
+	require.NoError(t, err)
+	require.Len(t, problems, 1)
+	assert.Contains(t, problems[0].Message, "discovery")
+	assert.Equal(t, kb.Discovery{Near: 60, TwoHops: 30, OffPiste: 10}, u.Galaxy("lang").Discovery)
+}
+
 func TestLoad_ReportsProblem_WhenLinkTargetIsMissing(t *testing.T) {
 	root := fixture(t)
 	writeFile(t, root, "galaxies/lang/japonais/keigo.md", "---\nname: Keigo\nlinks: [nowhere]\n---\n")
