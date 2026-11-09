@@ -13,7 +13,7 @@ internal/gitx      commits from the app; proposals/* branches through a temporar
         ▼
 internal/app       Service: the loaded universe and the views shared by API and MCP
    ├── internal/httpapi    JSON API, SSE reload events, /assets, /mcp, embedded web app
-   └── internal/mcpserver  MCP tools over stdio (`rtk mcp`) or HTTP (`/mcp`)
+   └── internal/mcpserver  MCP tools over stdio (`rtk mcp`) or HTTP (`/mcp`), see MCP.md
 
 web/ (Vite, TypeScript, Preact)
    src/sky/layout.ts     deterministic placement from ids and data

@@ -21,8 +21,10 @@ MCP, without loading everything.
 - **Never forgets for you**: a level never drops on its own. A subject not reviewed for
   longer than its theme allows only gets an amber dot.
 - **AI-ready**: `rtk mcp` exposes `profile`, `subgraph`, `node`, `fragments`, `search`,
-  `frontier`, `capture` and `propose`. Agents write to `inbox/` or to a `proposals/*` branch, never
-  to your main branch. The "Ce que l'IA reçoit" tab shows exactly what an agent gets.
+  `frontier`, `at_risk`, `due`, `recent`, `inbox`, `capture` and `propose`. Agents write to
+  `inbox/` or to a `proposals/*` branch, never to your main branch, and a proposal that would
+  break a file or lower a level is refused. The "Ce que l'IA reçoit" tab shows exactly what an
+  agent gets. Skills for Claude Code: `seed`, `inbox-triage`, `teach-back`. See [docs/MCP.md](docs/MCP.md).
 
 ## Quick start
 
@@ -36,13 +38,14 @@ make build
 
 Try it on the bundled example first: `./bin/rtk serve --data examples/knowledge`.
 
-Use it from Claude Code by adding the MCP server to the project that holds your knowledge:
+Use it from Claude Code:
 
-```json
-{ "mcpServers": { "knowledge": { "command": "rtk", "args": ["mcp", "--data", "/path/to/knowledge"] } } }
+```bash
+claude mcp add knowledge -- rtk mcp --data /path/to/knowledge               # stdio
+claude mcp add --transport http knowledge http://127.0.0.1:7878/mcp          # while rtk serve runs
 ```
 
-While `rtk serve` runs, the same tools are also served over HTTP at `http://127.0.0.1:7878/mcp`.
+Claude Desktop, the tool list with sizes, and what the server enforces: [docs/MCP.md](docs/MCP.md).
 
 ## Knowledge format
 
