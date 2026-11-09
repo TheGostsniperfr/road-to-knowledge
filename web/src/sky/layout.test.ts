@@ -79,6 +79,15 @@ describe("buildLayout", () => {
     for (const g of galaxies) if (g !== cook) expect(Math.hypot(g.x - cook.x, g.y - cook.y)).toBeGreaterThan((g.R + cook.R) * 1.1);
   });
 
+  it("keeps a pinned rotation when the map is pinned again", () => {
+    const gs = [{ ...galaxy("tech", "barred", 2), pin: { x: 10, y: 20, rotation: 1.25 } }, galaxy("lang", "spiral", 2)];
+
+    const pins = currentPins(buildLayout(universe(gs)));
+
+    expect(pins.tech).toEqual({ x: 10, y: 20, rotation: 1.25 });
+    expect(pins.lang).not.toHaveProperty("rotation");
+  });
+
   it("uses the pinned rotation when there is one", () => {
     const g = { ...galaxy("tech", "barred", 2), pin: { x: 0, y: 0, rotation: 0 } };
 
