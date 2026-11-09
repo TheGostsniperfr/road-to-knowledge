@@ -38,8 +38,20 @@ level of the two or three subjects you are least sure about. Offer defaults.
 ## 4. Write on a branch
 
 With the MCP server: one `propose` call per galaxy, `slug: seed`, conventional message
-`feat(seed): <galaxy>`. Without it: in the knowledge repo,
-`git switch -c proposals/seed`, write files, `rtk validate --data .`, commit per galaxy.
+`feat(seed): <galaxy>`. Without it, never switch branches in the user's checkout:
+`rtk serve` may be running on it and would commit review logs onto the proposal. Use a
+temporary worktree:
+
+```sh
+cd "$RTK_DATA"
+wt=$(mktemp -d)/seed
+git worktree add -b proposals/seed "$wt" HEAD
+# write files under "$wt", then for each galaxy:
+rtk validate --data "$wt"
+git -C "$wt" add galaxies/<galaxy> && git -C "$wt" commit -m "feat(seed): <galaxy>"
+git worktree remove "$wt"
+```
+
 Never commit to main.
 
 ## 5. Hand over

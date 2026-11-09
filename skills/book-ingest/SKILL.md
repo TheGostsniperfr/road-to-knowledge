@@ -115,16 +115,23 @@ copy tables, code listings or figures; describe them. Never commit the source fi
 
 With the MCP server: one `propose()` call, `slug: book-<slug>`, message
 `feat(book): <title>`, files = the fiche, any new `_galaxy.md`/`_cluster.md`, and the fog
-subjects. Without it, in the knowledge repo:
+subjects. Without it, never switch branches in the user's checkout: `rtk serve` may be
+running on it and would commit review logs and level changes onto the proposal. Use a
+temporary worktree instead:
 
 ```sh
-git switch -c proposals/book-<slug>
-# write the files
-rtk validate --data .
-git add galaxies/livres <other paths> && git commit -m "feat(book): <title>"
+cd "$RTK_DATA"
+wt=$(mktemp -d)/book-<slug>
+git worktree add -b proposals/book-<slug> "$wt" HEAD
+# write the files under "$wt"
+rtk validate --data "$wt"
+git -C "$wt" add galaxies <other paths> && git -C "$wt" commit -m "feat(book): <title>"
+git worktree remove "$wt"
 ```
 
-Fix every problem `rtk validate` reports before proposing.
+Fix every problem `rtk validate` reports before proposing. If `rtk book add` just added
+`library/` to `.gitignore`, that change is in the user's checkout, not the proposal:
+tell the user to commit `.gitignore` on main, or include the same line in the proposal.
 
 ## 8. Hand over
 
