@@ -10,10 +10,23 @@ what changed, what is open, where the next session starts.
    prints the open items). Roadmap and ids: [`ROADMAP.md`](ROADMAP.md).
 3. Next action: V1-08. Brian uses the app on his real knowledge repo
    (`TheGostsniperfr/knowledge`) for a week, with the MCP server connected (`docs/MCP.md`);
-   collect feedback in issues. Then V2-02 (semantic, Ollama), V2-08 (granularity) or V2-01
+   collect feedback in issues. Then V2-08 (granularity) or V2-01
    (mobile) with him.
 
 ## Log
+
+### 2026-11-09 · V2-02 search by meaning
+
+- `internal/embed` + `internal/semantic` (ADR-0013): embeddings in process with hugot's pure-Go
+  backend, no Ollama, no cgo. Default model multilingual-e5-small (135 MB, ~65 ms per search
+  on CPU); EmbeddingGemma-300m opt-in (`--model embeddinggemma-300m`, 1.26 GB, more precise).
+  `rtk models pull [--verify]`; vectors cached in `.rtk/vectors`, rebuilt in background.
+- Hybrid search (words + meaning, rank fusion) in Ctrl K, API and MCP `search`; word search
+  now drops stopwords and falls back from AND to OR. New MCP tool `neighbors`; frontier uses
+  semantic proximity.
+- `rtk mcp` (stdio) loads no model by default; use the HTTP transport of `rtk serve` for
+  search by meaning. `rtk bench search` reports tuning and held-out sets.
+- Open: inbox triage and news matching do not call `neighbors` yet; sets are small.
 
 ### 2026-11-09 · V2 wave 2: Anki, books, news, AI-ready
 
