@@ -26,9 +26,11 @@ var version = "dev"
 
 const usage = `rtk: Road to Knowledge
 
-  rtk serve    [--data DIR] [--addr 127.0.0.1:7878] [--news-every 6h]
+  rtk serve    [--data DIR] [--addr 127.0.0.1:7878] [--news-every 6h] [--model ID|off]
                                                       web app + API + MCP over HTTP at /mcp
-  rtk mcp      [--data DIR]                           MCP over stdio, for Claude Code
+  rtk mcp      [--data DIR] [--model ID|off]          MCP over stdio, for Claude Code
+  rtk models   pull|list [--model ID]                 download the local model for search by meaning
+  rtk bench    search [--data DIR] [--queries FILE]   score words vs meaning vs hybrid search
   rtk news     fetch|list [--data DIR] [--scope ID] [--since 7d] [--all]
                                                       fetch or read the feeds of your themes
   rtk validate [--data DIR]                           check every file, exit 1 on problems
@@ -64,6 +66,10 @@ func main() {
 		err = book(os.Args[2:])
 	case "anki":
 		err = ankiCmd(ctx, log, os.Args[2:])
+	case "models":
+		err = modelsCmd(ctx, os.Args[2:])
+	case "bench":
+		err = benchCmd(ctx, log, os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 	default:
@@ -92,11 +98,13 @@ func serve(ctx context.Context, log *slog.Logger, args []string) error {
 	data := dataFlag(fs)
 	addr := fs.String("addr", "127.0.0.1:7878", "listen address, keep it on localhost")
 	newsEvery := fs.Duration("news-every", 6*time.Hour, "fetch the theme feeds this often, 0 to disable")
+	model := modelFlag(fs)
 	fs.Parse(args)
 	svc, err := open(ctx, log, *data)
 	if err != nil {
 		return err
 	}
+	enableSemantic(ctx, svc, *model)
 	go svc.RunNews(ctx, *newsEvery)
 	go func() {
 		if err := svc.Watch(ctx); err != nil {
@@ -114,11 +122,13 @@ func serve(ctx context.Context, log *slog.Logger, args []string) error {
 func stdio(ctx context.Context, log *slog.Logger, args []string) error {
 	fs := flag.NewFlagSet("mcp", flag.ExitOnError)
 	data := dataFlag(fs)
+	model := modelFlag(fs)
 	fs.Parse(args)
 	svc, err := open(ctx, log, *data)
 	if err != nil {
 		return err
 	}
+	enableSemantic(ctx, svc, *model)
 	go svc.Watch(ctx)
 	return mcpserver.New(svc, version).Run(ctx, &mcp.StdioTransport{})
 }
