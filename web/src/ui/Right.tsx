@@ -3,6 +3,7 @@ import { api, type AIPreview, type Discovery, type GalaxyView, type Source, type
 import { renderMarkdown, renderMermaid, section } from "../markdown";
 import type { SkyNode } from "../sky/engine";
 import { buildLayout, currentPins } from "../sky/layout";
+import { AnkiExport } from "./AnkiExport";
 import { SHARES, STEP, rebalance } from "./discovery";
 import { pageOf, sourceHref, sourceLabel } from "./source";
 import { useTerms } from "./terms";
@@ -39,6 +40,7 @@ function Fiche({ universe, selected, go, review }: { universe: UniverseView | nu
             <div class="row">{strongest.map((s) => <button key={s.id} class="btn ghost" onClick={() => go(s.id)}>{s.name}</button>)}</div>
           </div>
         )}
+        <AnkiExport scope="" cards={stars.reduce((a, s) => a + s.cards, 0)} />
         {view === "galaxy" && <PinMap universe={universe} />}
         <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>{t.hint} Les fiches sont des fichiers Markdown dans ton repo : écris-les dans ton éditeur, la carte se met à jour seule.</p>
       </>
@@ -54,6 +56,7 @@ function Fiche({ universe, selected, go, review }: { universe: UniverseView | nu
         <div class="blk"><span class="k">Sous-thèmes</span>
           {g.clusters.map((c) => <button key={c.id} class="worm plain" onClick={() => go(c.id)}>{c.name}<small>{c.stars.length} sujets</small></button>)}
         </div>
+        <AnkiExport scope={g.id} cards={stars.reduce((a, s) => a + s.cards, 0)} />
         <GalaxySettings key={g.id + JSON.stringify([g.review_after_days, g.discovery])} g={g} />
       </>
     );
@@ -73,6 +76,7 @@ function Fiche({ universe, selected, go, review }: { universe: UniverseView | nu
             </button>
           ))}
         </div>
+        <AnkiExport scope={selected.id} cards={stars.reduce((a, s) => a + s.data.cards, 0)} />
       </>
     );
   }
