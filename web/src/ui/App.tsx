@@ -54,7 +54,9 @@ export function App() {
     // Switching views keeps the subject in focus: the new map opens where the old one was.
     if (universeRef.current) {
       s.setUniverse(universeRef.current);
-      s.select(selectedRef.current?.id ?? null, false);
+      const id = selectedRef.current?.id ?? null;
+      if (s instanceof Sky) setTimeout(() => s.select(id, true), 400);
+      else s.select(id, false);
     }
     return () => s.destroy();
   }, [view]);

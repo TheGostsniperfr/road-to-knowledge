@@ -1,6 +1,6 @@
 import type { UniverseView } from "../api";
 import { buildLayout, type Layout, type SNode, type SkyNode } from "../sky/layout";
-import { buildAtlas, circleOf, hit, type Atlas, type Circle } from "./pack";
+import { SIZE, buildAtlas, circleOf, hit, type Atlas, type Circle } from "./pack";
 
 export interface AtlasEvents {
   onSelect(node: SkyNode | null): void;
@@ -24,6 +24,7 @@ export class AtlasView {
   private selected: Circle | null = null;
   private hover: Circle | null = null;
   private focus: Set<Circle> | null = null;
+  private fitted = new Map<string, string>();
   private mouse = { x: 0, y: 0 };
   private w = 0;
   private h = 0;
@@ -80,6 +81,7 @@ export class AtlasView {
 
   private fit(c: Circle): Cam {
     const view = Math.min(this.w, this.h) || 800;
+    if (!(c.r > 0)) return { x: SIZE / 2, y: SIZE / 2, k: view / SIZE };
     if (c.kind !== "star" || !c.parent) return { x: c.x, y: c.y, k: (view * 0.9) / (2 * c.r) };
     // A subject is shown inside its sub-theme so its neighbours stay readable, unless the
     // sub-theme is so crowded that the subject would be too small to label.
@@ -90,7 +92,7 @@ export class AtlasView {
   }
 
   private clampK(k: number) {
-    if (!this.atlas) return k;
+    if (!this.atlas || !(this.atlas.root.r > 0)) return k;
     const view = Math.min(this.w, this.h) || 800;
     const min = (view * 0.5) / (2 * this.atlas.root.r);
     return Math.min(Math.max(k, min), min * 400);
@@ -139,6 +141,7 @@ export class AtlasView {
       this.cleanup.push(() => t.removeEventListener(type, f as EventListener));
     };
     on(c, "pointerdown", (e: PointerEvent) => {
+      if (e.button !== 0) return;
       c.setPointerCapture(e.pointerId);
       down = { x: e.offsetX, y: e.offsetY, cx: this.cam.x, cy: this.cam.y, moved: false };
     });
@@ -164,6 +167,7 @@ export class AtlasView {
       }
       down = null;
     });
+    on(c, "pointercancel", () => { down = null; c.classList.remove("drag"); });
     on(c, "pointerleave", () => { this.hover = null; this.kick(); });
     on(c, "wheel", (e: WheelEvent) => {
       e.preventDefault();
@@ -174,10 +178,15 @@ export class AtlasView {
       this.kick();
     }, { passive: false });
     on(window, "keydown", (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || !this.selected || (e.target as HTMLElement)?.closest?.("input,textarea")) return;
+      if (e.key !== "Escape" || !this.selected || (e.target as HTMLElement)?.closest?.("input,textarea") || document.querySelector(".review")) return;
       const p = this.selected.parent;
       this.select(p && p.kind !== "root" ? p.id : null);
     });
+    const dprQuery = () => matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+    let mq = dprQuery();
+    const onDpr = () => { mq.removeEventListener("change", onDpr); this.resize(); mq = dprQuery(); mq.addEventListener("change", onDpr); };
+    mq.addEventListener("change", onDpr);
+    this.cleanup.push(() => mq.removeEventListener("change", onDpr));
     const ro = new ResizeObserver(() => this.resize());
     ro.observe(c);
     this.cleanup.push(() => ro.disconnect());
@@ -194,12 +203,13 @@ export class AtlasView {
   }
 
   private resize() {
+    const wasEmpty = !this.w || !this.h;
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.w = this.canvas.clientWidth;
     this.h = this.canvas.clientHeight;
     this.canvas.width = Math.round(this.w * this.dpr);
     this.canvas.height = Math.round(this.h * this.dpr);
-    if (this.atlas && !this.flight) this.cam = this.fit(this.selected ?? this.atlas.root);
+    if (this.atlas && !this.flight && wasEmpty) this.cam = this.fit(this.selected ?? this.atlas.root);
     this.kick();
   }
 
@@ -421,10 +431,16 @@ export class AtlasView {
     ctx.font = `${weight} ${size}px ${FONT}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
-    let t = s;
-    if (ctx.measureText(t).width > maxW) {
-      while (t.length > 1 && ctx.measureText(t + "…").width > maxW) t = t.slice(0, -1);
-      t = t.trimEnd() + "…";
+    const key = `${ctx.font}|${Math.round(maxW)}|${s}`;
+    let t = this.fitted.get(key);
+    if (t === undefined) {
+      t = s;
+      if (ctx.measureText(t).width > maxW) {
+        while (t.length > 1 && ctx.measureText(t + "…").width > maxW) t = t.slice(0, -1);
+        t = t.trimEnd() + "…";
+      }
+      if (this.fitted.size > 4000) this.fitted.clear();
+      this.fitted.set(key, t);
     }
     ctx.globalAlpha = alpha;
     if (halo) {

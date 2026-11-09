@@ -42,9 +42,10 @@ const weight = (s: SNode) => (s.level ? 1 + s.level : 0.7);
 export function buildAtlas(l: Layout): Atlas {
   const data: Datum = {
     id: "", kind: "root", name: "Univers", hue: 0, node: null, value: 0,
-    children: l.galaxies.map((g) => ({
+    // d3 gives an empty container a zero radius, which no camera can frame: leave it out.
+    children: l.galaxies.filter((g) => g.clusters.some((c) => c.stars.length)).map((g) => ({
       id: g.id, kind: "galaxy", name: g.name, hue: g.hue, node: g, value: 0,
-      children: g.clusters.map((c) => ({
+      children: g.clusters.filter((c) => c.stars.length).map((c) => ({
         id: c.id, kind: "cluster", name: c.name, hue: c.hue, node: c, value: 0,
         children: c.stars.map((s) => ({ id: s.id, kind: "star", name: s.name, hue: s.hue, node: s, value: weight(s) })),
       })),
