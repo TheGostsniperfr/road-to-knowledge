@@ -62,8 +62,43 @@ func Build(ctx context.Context, u *kb.Universe) (*Index, error) {
 func (ix *Index) Close() error { return ix.db.Close() }
 
 // Search ranks name matches above body matches and accepts prefixes, so "kan" finds "Kana".
+// Every meaningful word must match first; when that finds fewer than limit subjects, subjects
+// matching any of the words follow, so a question phrased in full still finds something.
 func (ix *Index) Search(ctx context.Context, query string, limit int) ([]Hit, error) {
-	q := toMatch(query)
+	words := terms(query)
+	if kept := withoutStopwords(words); len(kept) > 0 {
+		words = kept
+	}
+	hits, err := ix.match(ctx, strings.Join(words, " "), limit)
+	if err != nil || len(hits) >= limit || len(words) < 2 {
+		return hits, err
+	}
+	more, err := ix.match(ctx, strings.Join(words, " OR "), limit)
+	if err != nil {
+		return hits, err
+	}
+	seen := map[string]bool{}
+	for _, h := range hits {
+		seen[h.ID] = true
+	}
+	for _, h := range more {
+		if len(hits) == limit {
+			break
+		}
+		if !seen[h.ID] {
+			hits = append(hits, h)
+		}
+	}
+	return hits, nil
+}
+
+// SearchAllWords is the first version: every word, stopwords included, must match. It stays as
+// the baseline of `rtk bench search`.
+func (ix *Index) SearchAllWords(ctx context.Context, query string, limit int) ([]Hit, error) {
+	return ix.match(ctx, strings.Join(terms(query), " "), limit)
+}
+
+func (ix *Index) match(ctx context.Context, q string, limit int) ([]Hit, error) {
 	if q == "" {
 		return nil, nil
 	}
@@ -84,11 +119,36 @@ func (ix *Index) Search(ctx context.Context, query string, limit int) ([]Hit, er
 	return hits, rows.Err()
 }
 
-// toMatch turns free text into a safe FTS5 query: every word becomes a quoted prefix term.
-func toMatch(q string) string {
+// terms turns free text into safe FTS5 terms: every word becomes a quoted prefix term.
+func terms(q string) []string {
 	words := strings.FieldsFunc(q, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsNumber(r) })
 	for i, w := range words {
 		words[i] = `"` + w + `"*`
 	}
-	return strings.Join(words, " ")
+	return words
 }
+
+func withoutStopwords(quoted []string) []string {
+	var out []string
+	for _, t := range quoted {
+		if !stopwords[strings.ToLower(strings.TrimSuffix(strings.Trim(t, `"*`), `"`))] {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// stopwords are the French and English words that carry no subject on their own; as prefix terms
+// they would also match half the corpus ("de" matches "des", "deux", "dev").
+var stopwords = func() map[string]bool {
+	m := map[string]bool{}
+	for _, w := range strings.Fields(`a à au aux avec ce ces cet cette comme dans de des du elle en est et
+		il je la le les leur lui ma mais me mes mon ne ni nos notre nous on ou où par pas pour qu que qui
+		sa sans se ses son sur ta te tes ton tu un une vos votre vous y d l c j s n m t qu est-ce quoi
+		comment quel quelle quels quelles faire fait
+		a an and are as at be by can do does for from has have how i in is it its my not of on or so
+		that the their them then there these this to was we what when where which who why will with you your`) {
+		m[w] = true
+	}
+	return m
+}()
