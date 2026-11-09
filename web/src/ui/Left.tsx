@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { api, type Hit, type InboxItem, type StarSummary, type UniverseView } from "../api";
+import { api, type Bucket, type FrontierView, type Hit, type InboxItem, type UniverseView } from "../api";
 import type { SkyNode } from "../sky/engine";
 
 type Tab = "plan" | "todo" | "inbox";
 
-const dot = (s: StarSummary, hue: number) =>
+const dot = (s: { level: number; stale?: boolean }, hue: number) =>
   s.level === 0 ? <span class="dot fog" /> : <span class={`dot${s.stale ? " stale" : ""}`} style={{ background: `hsl(${hue},80%,${45 + s.level * 8}%)` }} />;
 
 export function Left({ universe, selected, go }: { universe: UniverseView | null; selected: SkyNode | null; go: (id: string) => void }) {
@@ -57,7 +57,7 @@ export function Left({ universe, selected, go }: { universe: UniverseView | null
       </div>
       <div class="lbody">
         {tab === "plan" && (query.trim().length >= 2 ? <Hits hits={hits} go={go} /> : <Tree universe={universe} selId={selId} open={openPath} go={go} />)}
-        {tab === "todo" && <Todo universe={universe} go={go} />}
+        {tab === "todo" && <Todo universe={universe} selected={selected} go={go} />}
         {tab === "inbox" && <Inbox version={universe?.version ?? 0} />}
       </div>
     </aside>
@@ -112,24 +112,81 @@ function Hits({ hits, go }: { hits: Hit[]; go: (id: string) => void }) {
   );
 }
 
-function Todo({ universe, go }: { universe: UniverseView | null; go: (id: string) => void }) {
+const buckets: { key: Bucket; label: string }[] = [
+  { key: "near", label: "Proche" },
+  { key: "two_hops", label: "À deux pas" },
+  { key: "off_piste", label: "Hors piste" },
+];
+
+// The frontier follows the selection down to its sub-theme; the chips widen it back.
+function scopesOf(universe: UniverseView, selected: SkyNode | null) {
+  const out = [{ id: "", name: "Univers" }];
+  if (!selected) return out;
+  const parts = selected.id.split("#")[0].split("/");
+  const g = universe.galaxies.find((x) => x.id === parts[0]);
+  if (!g) return out;
+  out.push({ id: g.id, name: g.name });
+  const c = parts.length > 1 ? g.clusters.find((x) => x.id === parts.slice(0, 2).join("/")) : undefined;
+  if (c) out.push({ id: c.id, name: c.name });
+  return out;
+}
+
+function Todo({ universe, selected, go }: { universe: UniverseView | null; selected: SkyNode | null; go: (id: string) => void }) {
+  const scopes = universe ? scopesOf(universe, selected) : [];
+  const deepest = scopes[scopes.length - 1]?.id ?? "";
+  const [scope, setScope] = useState(deepest);
+  const [frontier, setFrontier] = useState<FrontierView | null>(null);
+  const [err, setErr] = useState("");
+  useEffect(() => setScope(deepest), [deepest]);
+  useEffect(() => {
+    if (!universe) return;
+    api.frontier(scope).then((f) => { setFrontier(f); setErr(""); }).catch((e) => setErr(String(e)));
+  }, [scope, universe?.version]);
   if (!universe) return null;
-  const items = universe.galaxies.flatMap((g) => g.clusters.flatMap((c) => c.stars.filter((s) => s.state !== "acquired").map((s) => ({ s, g }))));
-  const order = { progress: 0, explore: 1, idea: 2, acquired: 3 };
-  items.sort((a, b) => order[a.s.state] - order[b.s.state]);
-  const label = { progress: "en cours", explore: "à explorer", idea: "idée", acquired: "acquis" };
-  if (!items.length) return <p class="empty">Rien en attente. Le brouillard est dissipé.</p>;
+
+  const hue = new Map(universe.galaxies.map((g) => [g.id, g.hue]));
+  const progress = universe.galaxies.flatMap((g) => g.clusters.flatMap((c) =>
+    c.stars.filter((s) => s.state === "progress" && (!scope || s.id.startsWith(scope + "/"))).map((s) => ({ s, g }))));
+  const suggestions = frontier?.suggestions ?? [];
+
   return (
     <div>
-      {items.map(({ s, g }) => (
-        <div key={s.id} class="todo">
-          {dot(s, g.hue)}
-          <button onClick={() => go(s.id)}>
-            {s.name}
-            <small>{g.name} · {label[s.state]}</small>
-          </button>
-        </div>
-      ))}
+      <div class="scopes" role="group" aria-label="Portée">
+        {scopes.map((s) => (
+          <button key={s.id} class={`chip${s.id === scope ? " on" : ""}`} aria-pressed={s.id === scope} onClick={() => setScope(s.id)}>{s.name}</button>
+        ))}
+      </div>
+      {err && <p class="empty">{err}</p>}
+      {frontier && !suggestions.length && <p class="empty">Rien à suggérer ici. Ajoute des sujets niveau 0 ou élargis la portée.</p>}
+      {frontier && buckets.map((b) => {
+        const items = suggestions.filter((s) => s.bucket === b.key);
+        if (!items.length) return null;
+        return (
+          <section key={b.key} class="fgroup">
+            <h4>{b.label}<span class="n">{frontier.budget[b.key]} %</span></h4>
+            {items.map((s) => (
+              <div key={s.id} class="todo">
+                {dot(s, hue.get(s.id.split("/")[0]) ?? 0)}
+                <button onClick={() => go(s.id)}>
+                  {s.name}
+                  <small>{s.reason}</small>
+                </button>
+              </div>
+            ))}
+          </section>
+        );
+      })}
+      {progress.length > 0 && (
+        <section class="fgroup">
+          <h4>En cours<span class="n">{progress.length}</span></h4>
+          {progress.map(({ s, g }) => (
+            <div key={s.id} class="todo">
+              {dot(s, g.hue)}
+              <button onClick={() => go(s.id)}>{s.name}<small>{g.name} · niveau {s.level}</small></button>
+            </div>
+          ))}
+        </section>
+      )}
     </div>
   );
 }
