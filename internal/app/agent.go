@@ -172,6 +172,7 @@ func (s *Service) AtRisk(scope string, limit int) ([]RiskItem, error) {
 // through propose without guessing the frontmatter.
 func (s *Service) RawFile(id string) (string, error) {
 	u, _, _, _ := s.snapshot()
+	id = s.live(u, id)
 	st := u.Star(id)
 	if st == nil {
 		return "", fmt.Errorf("star %q: %w", id, ErrNotFound)

@@ -55,6 +55,8 @@ type UniverseView struct {
 	Galaxies []GalaxyView `json:"galaxies"`
 	Problems []kb.Problem `json:"problems"`
 	Inbox    int          `json:"inbox"`
+	// Redirects maps ids from before a restructure to today's, so old deep links still open.
+	Redirects map[string]string `json:"redirects,omitempty"`
 }
 
 type LinkRef struct {
@@ -130,6 +132,9 @@ func (s *Service) starView(u *kb.Universe, st *kb.Star) StarView {
 func (s *Service) Universe() UniverseView {
 	u, _, problems, version := s.snapshot()
 	out := UniverseView{Version: version, Problems: problems, Galaxies: []GalaxyView{}}
+	if r := s.book.Redirects().All(); len(r) > 0 {
+		out.Redirects = r
+	}
 	if out.Problems == nil {
 		out.Problems = []kb.Problem{}
 	}
@@ -155,6 +160,7 @@ func (s *Service) Universe() UniverseView {
 
 func (s *Service) Star(id string) (StarView, error) {
 	u, _, _, _ := s.snapshot()
+	id = s.live(u, id)
 	st := u.Star(id)
 	if st == nil {
 		return StarView{}, fmt.Errorf("star %q: %w", id, ErrNotFound)
@@ -237,6 +243,7 @@ type SubgraphNode struct {
 // Subgraph returns a node and its descendants down to depth, names and levels only.
 func (s *Service) Subgraph(id string, depth int) (SubgraphNode, error) {
 	u, _, _, _ := s.snapshot()
+	id = s.live(u, id)
 	depth = max(0, min(depth, 3))
 	star := func(st *kb.Star) SubgraphNode {
 		l := st.Level
@@ -295,6 +302,7 @@ type NodeBrief struct {
 // Node is the brief an agent gets first; the full text costs a separate fragments() call.
 func (s *Service) Node(id string) (NodeBrief, error) {
 	u, _, _, _ := s.snapshot()
+	id = s.live(u, id)
 	st := u.Star(id)
 	if st == nil {
 		return NodeBrief{}, fmt.Errorf("star %q: %w", id, ErrNotFound)
@@ -319,6 +327,7 @@ func (s *Service) Node(id string) (NodeBrief, error) {
 // Fragments returns the fiche body, or one section of it when section names a planet.
 func (s *Service) Fragments(id, section string) (string, error) {
 	u, _, _, _ := s.snapshot()
+	id = s.live(u, id)
 	st := u.Star(id)
 	if st == nil {
 		return "", fmt.Errorf("star %q: %w", id, ErrNotFound)
