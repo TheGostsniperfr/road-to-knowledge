@@ -329,3 +329,7 @@ a.srcl { color: var(--teal); }
 .src.bad small { color: var(--stale); }
 .tabs button { white-space: nowrap; padding-left: 2px; padding-right: 2px; }
 [data-theme^="atlas"] .tabs button { font-size: .72rem; }
+
+/* Search by meaning: a status line under the box and a tag on hits found without a shared word. */
+.semstat { display: block; margin-top: 4px; font-family: var(--mono); font-size: .62rem; color: var(--muted); }
+.bysense { margin-left: 6px; font-style: normal; font-family: var(--mono); font-size: .58rem; padding: 0 5px; border-radius: 99px; border: 1px solid var(--line-2); color: var(--teal); vertical-align: 1px; }
