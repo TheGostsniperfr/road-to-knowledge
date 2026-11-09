@@ -70,13 +70,14 @@ type Status struct {
 	Message string `json:"message,omitempty"`
 }
 
+// ErrOutdated means a newer build started while this one ran; its vectors were dropped.
+var ErrOutdated = errors.New("semantic: build superseded by a newer one")
+
 type entry struct {
 	chunk Chunk
 	vec   []float32
 }
 
-// Index holds the vectors of the current universe. It is safe for concurrent use; a rebuild swaps
-// the whole set at once, so a search sees either the old or the new universe, never a mix.
 // Thresholds are per model: each model spreads its cosines differently.
 type Thresholds struct {
 	// Search drops query matches below it.
@@ -85,6 +86,8 @@ type Thresholds struct {
 	Near float32
 }
 
+// Index holds the vectors of the current universe. It is safe for concurrent use; a rebuild swaps
+// the whole set at once, so a search sees either the old or the new universe, never a mix.
 type Index struct {
 	emb       embed.Embedder
 	th        Thresholds
@@ -94,12 +97,17 @@ type Index struct {
 	entries  []entry
 	subjects map[string][]float32
 	status   Status
+	// gen counts builds; only the latest may swap its vectors in or write the cache, so a slow
+	// outdated build finishing after a newer one can never bring back old vectors.
+	gen uint64
+	// saveMu keeps two cache writes from interleaving.
+	saveMu sync.Mutex
 }
 
 func New(emb embed.Embedder, th Thresholds, cacheDir string) *Index {
 	return &Index{
 		emb: emb, th: th,
-		cachePath: filepath.Join(cacheDir, emb.Model()+".bin"),
+		cachePath: filepath.Join(cacheDir, emb.Model()+"-"+emb.Fingerprint()+".bin"),
 		status:    Status{State: StateIndexing, Model: emb.Model()},
 	}
 }
@@ -114,13 +122,8 @@ func (ix *Index) Model() string { return ix.emb.Model() }
 
 func (ix *Index) Thresholds() Thresholds { return ix.th }
 
-func (ix *Index) setStatus(f func(*Status)) {
-	ix.mu.Lock()
-	f(&ix.status)
-	ix.mu.Unlock()
-}
-
-// cacheFile maps content hashes to vectors for one model; the model id is in the file name.
+// cacheFile maps content hashes to vectors for one model; the model id and a fingerprint of how it
+// embeds (revision, prefixes, dimensions) are in the file name, so a change starts a new file.
 type cacheFile struct {
 	Dims    int
 	Vectors map[string][]float32
@@ -135,6 +138,11 @@ func (ix *Index) loadCache() map[string][]float32 {
 	var c cacheFile
 	if err := gob.NewDecoder(f).Decode(&c); err != nil || c.Dims != ix.emb.Dims() || c.Vectors == nil {
 		return map[string][]float32{}
+	}
+	for h, v := range c.Vectors {
+		if len(v) != ix.emb.Dims() {
+			delete(c.Vectors, h)
+		}
 	}
 	return c.Vectors
 }
@@ -152,6 +160,10 @@ func (ix *Index) saveCache(vectors map[string][]float32) error {
 		tmp.Close()
 		return fmt.Errorf("semantic: write cache: %w", err)
 	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("semantic: %w", err)
+	}
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("semantic: %w", err)
 	}
@@ -161,6 +173,10 @@ func (ix *Index) saveCache(vectors map[string][]float32) error {
 // Build embeds the chunks that are not cached yet, then swaps them in. It returns how many chunks
 // it had to embed. Cancelling ctx leaves the previous set in place.
 func (ix *Index) Build(ctx context.Context, chunks []Chunk) (int, error) {
+	ix.mu.Lock()
+	ix.gen++
+	gen := ix.gen
+	ix.mu.Unlock()
 	cache := ix.loadCache()
 	var todo []Chunk
 	seen := map[string]bool{}
@@ -170,9 +186,11 @@ func (ix *Index) Build(ctx context.Context, chunks []Chunk) (int, error) {
 			seen[c.Hash] = true
 		}
 	}
-	ix.setStatus(func(s *Status) {
-		s.State, s.Done, s.Total, s.Message = StateIndexing, len(chunks)-len(todo), len(chunks), ""
-	})
+	ix.mu.Lock()
+	if ix.gen == gen {
+		ix.status = Status{State: StateIndexing, Model: ix.emb.Model(), Done: len(chunks) - len(todo), Total: len(chunks)}
+	}
+	ix.mu.Unlock()
 	const step = 32
 	for start := 0; start < len(todo); start += step {
 		batch := todo[start:min(start+step, len(todo))]
@@ -184,20 +202,28 @@ func (ix *Index) Build(ctx context.Context, chunks []Chunk) (int, error) {
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				ix.mu.Lock()
-				if ix.entries != nil {
+				if ix.entries != nil && ix.gen == gen {
 					ix.status = Status{State: StateReady, Model: ix.emb.Model(), Done: len(ix.entries), Total: len(ix.entries)}
 				}
 				ix.mu.Unlock()
 				return 0, err
 			}
-			ix.setStatus(func(s *Status) { s.State, s.Message = StateError, err.Error() })
+			ix.mu.Lock()
+			if ix.gen == gen {
+				ix.status.State, ix.status.Message = StateError, err.Error()
+			}
+			ix.mu.Unlock()
 			return 0, err
 		}
 		for i, c := range batch {
 			cache[c.Hash] = vecs[i]
 		}
 		done := start + len(batch)
-		ix.setStatus(func(s *Status) { s.Done = len(chunks) - len(todo) + done })
+		ix.mu.Lock()
+		if ix.gen == gen {
+			ix.status.Done = len(chunks) - len(todo) + done
+		}
+		ix.mu.Unlock()
 	}
 	entries := make([]entry, 0, len(chunks))
 	keep := make(map[string][]float32, len(chunks))
@@ -207,10 +233,22 @@ func (ix *Index) Build(ctx context.Context, chunks []Chunk) (int, error) {
 	}
 	subjects := averages(entries)
 	ix.mu.Lock()
+	if ix.gen != gen || ctx.Err() != nil {
+		ix.mu.Unlock()
+		return 0, ErrOutdated
+	}
 	ix.entries, ix.subjects = entries, subjects
 	ix.status = Status{State: StateReady, Model: ix.emb.Model(), Done: len(chunks), Total: len(chunks)}
 	ix.mu.Unlock()
 	if len(todo) > 0 || len(keep) != len(cache) {
+		ix.saveMu.Lock()
+		defer ix.saveMu.Unlock()
+		ix.mu.RLock()
+		current := ix.gen == gen
+		ix.mu.RUnlock()
+		if !current {
+			return len(todo), nil
+		}
 		if err := ix.saveCache(keep); err != nil {
 			return len(todo), err
 		}
