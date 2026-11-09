@@ -21,7 +21,7 @@ issue body.
 - [ ] V2-02 Semantic view from local embeddings (Ollama), `neighbors()` tool
 - [ ] V2-03 Anki: import `.apkg`, export with stable GUIDs, AnkiConnect
 - [ ] V2-04 Books: `book-ingest` skill, PDFs in MinIO, "à retenir" fiches
-- [ ] V2-05 Discovery: frontier suggestions with the per-theme budget, `frontier()` tool
+- [x] V2-05 Discovery: frontier suggestions with the per-theme budget, `frontier()` tool
 - [ ] V2-06 Morning brief: Miniflux collection, Claude routine triage, sources tab
 - [ ] V2-07 Evening inbox triage routine
 - [ ] V2-08 Granularity: split, merge and move subjects with history kept

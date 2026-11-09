@@ -31,6 +31,9 @@ web/ (Vite, TypeScript, Preact)
   key, commits the file, reloads.
 - **Review**: each grade appends one line to `review/log.jsonl`; closing the drawer
   commits the log once.
+- **What next**: `app.Frontier` ranks `idea` and `explore` subjects around a scope and
+  splits them by the galaxy's `discovery` budget; the "À explorer" tab and the MCP tool
+  `frontier` read the same function, through `GET /api/frontier`.
 - **Agent**: `propose` writes files on `proposals/<slug>` from a worktree in a temp dir;
   the user reviews with `git diff main...proposals/<slug>` and merges.
 
