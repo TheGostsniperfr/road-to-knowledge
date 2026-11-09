@@ -62,6 +62,16 @@ Fetched articles are a cache in `.rtk/news/` (git-ignored, kept 30 days), never 
 delete the folder and the next fetch rebuilds it. `rtk serve` fetches at start and every
 six hours (`--news-every`), `rtk news fetch` on demand.
 
+## Caches
+
+`.rtk/` at the root of the knowledge repo holds caches only, ignored by git, safe to delete:
+
+- `.rtk/news/`: fetched articles (above).
+- `.rtk/vectors/<model>.bin`: one vector per subject summary and per notion, keyed by a
+  hash of the text, for search by meaning (ADR-0013). A reload only embeds the chunks whose
+  text changed; another model starts its own file. The model itself lives in the user cache
+  (`~/.cache/rtk/models/`, or `$RTK_MODELS`), never in the repo.
+
 The galaxy fiche in the app edits `review_after_days` and `discovery` and commits the file.
 
 ## Subject file

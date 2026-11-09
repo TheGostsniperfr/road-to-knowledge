@@ -26,8 +26,12 @@ MCP, without loading everything.
 - **Veille**: list RSS or Atom feeds in a theme (`sources:`). The "Veille" tab shows the
   articles that mention your subjects, and the `morning-brief` skill turns them into a short
   brief each morning.
+- **Search by meaning**: Ctrl K and `search()` mix words with meaning from a small model that
+  runs inside `rtk` on the CPU: no Ollama, no GPU, nothing leaves the PC. "isoler des
+  conteneurs" finds gVisor, an English question finds a French fiche. `rtk models pull` once
+  (135 MB); until then search is words only (ADR-0013).
 - **AI-ready**: `rtk mcp` exposes `profile`, `subgraph`, `node`, `fragments`, `search`,
-  `frontier`, `news`, `at_risk`, `due`, `recent`, `inbox`, `capture` and `propose`. Agents write to
+  `frontier`, `neighbors`, `news`, `at_risk`, `due`, `recent`, `inbox`, `capture` and `propose`. Agents write to
   `inbox/` or to a `proposals/*` branch, never to your main branch, and a proposal that would
   break a file or lower a level is refused. The "Ce que l'IA reçoit" tab shows exactly what an
   agent gets. Skills for Claude Code: `seed`, `book-ingest`, `inbox-triage`, `teach-back`, `morning-brief`. See [docs/MCP.md](docs/MCP.md).
@@ -39,6 +43,7 @@ nix develop            # or bring Go 1.26 and Node 24 yourself
 make init
 make build
 ./bin/rtk init ~/knowledge && cd ~/knowledge && git init && git add . && git commit -m "init"
+./bin/rtk models pull                  # optional: 135 MB model for search by meaning
 ./bin/rtk serve --data ~/knowledge     # http://127.0.0.1:7878
 ```
 
