@@ -58,17 +58,28 @@ func (s *Service) news() (*news.Store, error) {
 	return s.newsStore, s.newsErr
 }
 
-// Feeds lists the sources declared in the knowledge repo, theme feeds first.
+// Feeds lists the sources declared in the knowledge repo, theme feeds first. A URL listed in
+// several places is fetched once and belongs to its first listing: the broader scope, since a
+// theme comes before its sub-themes. Matching still shows its items under any scope whose
+// subjects they mention.
 func (s *Service) Feeds() []news.Feed {
 	u, _, _, _ := s.snapshot()
 	var out []news.Feed
+	seen := map[string]bool{}
+	add := func(src kb.Source, scope string) {
+		if seen[src.URL] {
+			return
+		}
+		seen[src.URL] = true
+		out = append(out, news.Feed{URL: src.URL, Name: sourceName(src), Scope: scope})
+	}
 	for _, g := range u.Galaxies {
 		for _, src := range g.Sources {
-			out = append(out, news.Feed{URL: src.URL, Name: sourceName(src), Scope: g.ID})
+			add(src, g.ID)
 		}
 		for _, c := range g.Clusters {
 			for _, src := range c.Sources {
-				out = append(out, news.Feed{URL: src.URL, Name: sourceName(src), Scope: c.ID})
+				add(src, c.ID)
 			}
 		}
 	}
@@ -93,8 +104,16 @@ func (s *Service) FetchNews(ctx context.Context) (news.Report, error) {
 	defer s.newsMu.Unlock()
 	f := news.NewFetcher()
 	f.Now = s.now
-	return f.Run(ctx, st, s.Feeds())
+	rep, err := f.Run(ctx, st, s.Feeds())
+	if err == nil && rep.NewItems > 0 {
+		s.notify(NewsEvent)
+	}
+	return rep, err
 }
+
+// NewsEvent goes to subscribers instead of a version number when new articles arrive, so an
+// open "Veille" tab refreshes without reloading the whole universe.
+const NewsEvent int64 = -1
 
 // RunNews fetches shortly after start, then every interval, until ctx ends.
 func (s *Service) RunNews(ctx context.Context, every time.Duration) {
