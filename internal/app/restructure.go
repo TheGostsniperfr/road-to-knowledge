@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,6 +60,27 @@ type Plan struct {
 	Summary []string        `json:"summary"`
 	Message string          `json:"message"`
 	Branch  string          `json:"branch,omitempty"`
+	// Hash identifies the file changes; the app sends it back so it applies the plan it showed.
+	Hash string `json:"hash"`
+}
+
+// liveIDs answers which ids exist in u: themes, sub-themes, subjects and cards. A rename never
+// redirects a live id (ADR-0014).
+func liveIDs(u *kb.Universe) review.Live {
+	ids := map[string]bool{}
+	for _, g := range u.Galaxies {
+		ids[g.ID] = true
+		for _, c := range g.Clusters {
+			ids[c.ID] = true
+			for _, st := range c.Stars {
+				ids[st.ID] = true
+				for _, card := range st.Cards {
+					ids[card.ID] = true
+				}
+			}
+		}
+	}
+	return func(id string) bool { return ids[id] }
 }
 
 var segment = regexp.MustCompile(`^[\p{Ll}\p{N}][\p{Ll}\p{N}-]*$`)
@@ -84,10 +108,12 @@ type planner struct {
 	order   []string
 	renames []review.Rename
 	summary []string
+	// notions maps "subject#notion" references to where a split or a merge sends the notion.
+	notions map[string]string
 }
 
 func (s *Service) newPlanner(u *kb.Universe) *planner {
-	return &planner{s: s, u: u, now: s.now(), files: map[string]*FileOp{}}
+	return &planner{s: s, u: u, now: s.now(), files: map[string]*FileOp{}, notions: map[string]string{}}
 }
 
 func (p *planner) rel(abs string) string {
@@ -201,14 +227,21 @@ func replaceBody(content, body string) string {
 	return "---\n" + string(front) + "---\n" + body
 }
 
+// ErrPlanChanged means the files changed between the plan the user saw and the apply.
+var ErrPlanChanged = errors.New("the plan changed since it was shown")
+
 // Restructure plans an operation and, unless dryRun, applies it on the user's branch with one
-// commit: the user asked for it from the app or the CLI.
-func (s *Service) Restructure(ctx context.Context, op Op, dryRun bool) (Plan, error) {
+// commit: the user asked for it from the app or the CLI. A non-empty expect is the hash of the
+// plan the user saw; a different plan today is refused instead of applied.
+func (s *Service) Restructure(ctx context.Context, op Op, dryRun bool, expect string) (Plan, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	plan, err := s.plan(op)
 	if err != nil || dryRun {
 		return plan, err
+	}
+	if expect != "" && expect != plan.Hash {
+		return plan, fmt.Errorf("%w: look at the new plan before applying: %w", ErrPlanChanged, ErrInvalid)
 	}
 	if err := s.applyPlan(ctx, plan); err != nil {
 		return plan, err
@@ -217,7 +250,8 @@ func (s *Service) Restructure(ctx context.Context, op Op, dryRun bool) (Plan, er
 }
 
 // ProposeRestructure plans an operation and writes it on proposals/<slug> for the user to review,
-// the agent path of ADR-0004.
+// the agent path of ADR-0004. Each restructure gets its own branch: an existing one is refused,
+// so an earlier proposal the user has not merged yet is never overwritten.
 func (s *Service) ProposeRestructure(ctx context.Context, op Op, slug string, dryRun bool) (Plan, error) {
 	s.writeMu.Lock()
 	plan, err := s.plan(op)
@@ -225,8 +259,14 @@ func (s *Service) ProposeRestructure(ctx context.Context, op Op, slug string, dr
 	if err != nil || dryRun {
 		return plan, err
 	}
+	if s.git == nil {
+		return plan, fmt.Errorf("restructure proposals need the knowledge folder to be a git repository: %w", ErrInvalid)
+	}
 	if slug == "" {
-		slug = "restructure-" + kb.Slug(op.Kind+"-"+firstNonEmpty(op.ID, op.Into))
+		slug = "restructure-" + kb.Slug(op.Kind+"-"+firstNonEmpty(op.ID, op.Into)) + "-" + plan.Hash[:7]
+	}
+	if s.git.HasBranch(ctx, "proposals/"+slug) {
+		return plan, fmt.Errorf("proposals/%s already exists and may hold work not merged yet; pick another slug or leave it empty for a unique one: %w", slug, ErrInvalid)
 	}
 	var files []gitx.FileChange
 	for _, f := range plan.Files {
@@ -286,6 +326,9 @@ func (s *Service) plan(op Op) (Plan, error) {
 	if err := p.rewriteLinks(); err != nil {
 		return Plan{}, err
 	}
+	if err := p.keepEmptiedSubThemes(); err != nil {
+		return Plan{}, err
+	}
 	plan := Plan{Op: op, Renames: p.renames, Summary: p.summary, Message: msg, Files: []FileOp{}}
 	if plan.Renames == nil {
 		plan.Renames = []review.Rename{}
@@ -293,7 +336,60 @@ func (s *Service) plan(op Op) (Plan, error) {
 	for _, rel := range p.order {
 		plan.Files = append(plan.Files, *p.files[rel])
 	}
+	plan.Hash = plan.hash()
 	return plan, nil
+}
+
+// hash identifies what a plan would do to the files, without the timestamps, so the plan shown
+// in the app can be checked against the one about to be applied.
+func (p Plan) hash() string {
+	h := sha256.New()
+	for _, f := range p.Files {
+		fmt.Fprintf(h, "%s\x00%s\x00%s\x00%d\x00%s\x00", f.Kind, f.From, f.Path, len(f.Content), f.Content)
+	}
+	for _, r := range p.Renames {
+		fmt.Fprintf(h, "%s\x00%s\x00", r.From, r.To)
+	}
+	return hex.EncodeToString(h.Sum(nil))[:16]
+}
+
+// keepEmptiedSubThemes writes a _cluster.md for a sub-theme this plan leaves without subjects:
+// git does not keep empty folders, so the sub-theme would vanish from every other clone.
+func (p *planner) keepEmptiedSubThemes() error {
+	for _, g := range p.u.Galaxies {
+		for _, cl := range g.Clusters {
+			if len(cl.Stars) == 0 {
+				continue
+			}
+			clusterRel := p.rel(cl.Path)
+			if f, ok := p.files[clusterRel]; ok && f.Kind == "move" {
+				continue // the sub-theme itself moves
+			}
+			dir := kb.GalaxiesDir + "/" + cl.ID + "/"
+			left := map[string]bool{}
+			for _, st := range cl.Stars {
+				rel := p.rel(st.Path)
+				if f, ok := p.files[rel]; !ok || f.Kind == "write" {
+					left[rel] = true
+				}
+			}
+			for _, f := range p.files {
+				name := strings.TrimPrefix(f.Path, dir)
+				if f.Kind != "delete" && name != f.Path && !strings.Contains(name, "/") && !strings.HasPrefix(name, "_") {
+					left[f.Path] = true
+				}
+			}
+			if len(left) > 0 {
+				continue
+			}
+			if _, err := os.Stat(cl.Path); err == nil {
+				continue // its _cluster.md stays and keeps the folder
+			}
+			p.write(clusterRel, "---\nname: "+strconv.Quote(cl.Name)+"\n---\n")
+			p.summary = append(p.summary, fmt.Sprintf("%s garde son dossier (_cluster.md créé)", cl.ID))
+		}
+	}
+	return nil
 }
 
 // --- move ---
@@ -515,6 +611,11 @@ func (p *planner) planSplit(op Op) (string, error) {
 		for _, card := range kb.CardsIn(st.ID, strings.Join(text, "\n")) {
 			p.rename(card.ID, part.ID+card.ID[strings.LastIndexByte(card.ID, ':'):])
 		}
+		for si, sec := range sections {
+			if owner[si] == pi {
+				p.notions[st.ID+"#"+sec.Slug] = part.ID + "#" + sec.Slug
+			}
+		}
 		p.summary = append(p.summary, fmt.Sprintf("%s → %s (%d notion%s)", st.ID, part.ID, len(text), plural(len(text))))
 	}
 	return fmt.Sprintf("refactor(knowledge): split %s into %d", st.Name, len(op.Parts)+1), nil
@@ -633,8 +734,16 @@ func (p *planner) planMerge(op Op) (string, error) {
 			continue
 		}
 		var keep []string
+		inFence := false
 		for _, line := range strings.Split(b, "\n") {
-			cards := kb.CardsIn(st.ID, line)
+			if t := strings.TrimSpace(line); strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~") {
+				inFence = !inFence
+			}
+			// A "q :: a" line inside a code block is code, not a card: never deduplicate it.
+			var cards []kb.Card
+			if !inFence {
+				cards = kb.CardsIn(st.ID, line)
+			}
 			if len(cards) == 1 {
 				q := strings.TrimSpace(cards[0].Question)
 				if a, ok := known[q]; ok {
@@ -649,13 +758,19 @@ func (p *planner) planMerge(op Op) (string, error) {
 		}
 		rest := strings.Join(keep, "\n")
 		// A part split out of the base comes back as the notions it was, not under its own heading.
-		if pre, secs := kb.Sections(rest); strings.TrimSpace(pre) == splitNote(base.Name) && len(secs) > 0 {
+		pre, secs := kb.Sections(rest)
+		if strings.TrimSpace(pre) == splitNote(base.Name) && len(secs) > 0 {
 			for _, sec := range secs {
 				parts = append(parts, strings.TrimRight(sec.Text, "\n"))
+				p.notions[st.ID+"#"+sec.Slug] = into + "#" + sec.Slug
 			}
 			continue
 		}
 		parts = append(parts, fmt.Sprintf("## %s\n\n%s", st.Name, strings.TrimSpace(demote(rest))))
+		// Its notions become sub-headings: a link to one of them now lands on the source's section.
+		for _, sec := range secs {
+			p.notions[st.ID+"#"+sec.Slug] = into + "#" + kb.Slug(st.Name)
+		}
 	}
 	drop := map[string]bool{into: true}
 	for _, st := range stars {
@@ -730,8 +845,12 @@ func uniq(xs []string, drop map[string]bool) []string {
 
 // --- links ---
 
-// rewriteLinks points every link at an id this plan renamed to the new id, in every subject file
-// the plan leaves in place, moved files included.
+// deepLink finds the app's links to a subject or a notion written in a fiche: (#/theme/sub/subject#notion).
+var deepLink = regexp.MustCompile(`\(#/([^()\s]+)\)`)
+
+// rewriteLinks points every reference this plan breaks at its new id, in every subject file the
+// plan leaves in place, moved files included: `links:` entries (full ids, bare slugs, id#notion)
+// and deep links in the text.
 func (p *planner) rewriteLinks() error {
 	mapping := map[string]string{}
 	for _, r := range p.renames {
@@ -739,7 +858,7 @@ func (p *planner) rewriteLinks() error {
 			mapping[r.From] = r.To
 		}
 	}
-	if len(mapping) == 0 {
+	if len(mapping) == 0 && len(p.notions) == 0 {
 		return nil
 	}
 	slugs := map[string][]string{}
@@ -747,16 +866,28 @@ func (p *planner) rewriteLinks() error {
 		slug := st.ID[strings.LastIndex(st.ID, "/")+1:]
 		slugs[slug] = append(slugs[slug], st.ID)
 	}
-	resolve := func(l string) (string, bool) {
-		if to, ok := mapping[l]; ok {
+	// resolve maps one reference; bareSlug allows the short form `links:` accepts.
+	resolve := func(ref string, bareSlug bool) (string, bool) {
+		if to, ok := p.notions[ref]; ok {
 			return to, true
 		}
-		if ids := slugs[l]; len(ids) == 1 {
-			if to, ok := mapping[ids[0]]; ok {
-				return to, true
+		base, frag, hasFrag := strings.Cut(ref, "#")
+		to, ok := mapping[base]
+		if !ok && bareSlug {
+			if ids := slugs[base]; len(ids) == 1 {
+				if to2, ok2 := p.notions[ids[0]+"#"+frag]; ok2 && hasFrag {
+					return to2, true
+				}
+				to, ok = mapping[ids[0]]
 			}
 		}
-		return "", false
+		if !ok {
+			return "", false
+		}
+		if hasFrag {
+			return to + "#" + frag, true
+		}
+		return to, true
 	}
 	stars := p.u.Stars()
 	sort.Slice(stars, func(i, j int) bool { return stars[i].ID < stars[j].ID })
@@ -769,8 +900,8 @@ func (p *planner) rewriteLinks() error {
 		if err != nil {
 			return err
 		}
-		m, _, err := parseFile(c)
-		if err != nil || len(m.Links) == 0 {
+		m, body, err := parseFile(c)
+		if err != nil {
 			continue
 		}
 		self := st.ID
@@ -780,7 +911,7 @@ func (p *planner) rewriteLinks() error {
 		changed := false
 		var out []string
 		for _, l := range m.Links {
-			if to, ok := resolve(l); ok {
+			if to, ok := resolve(l, true); ok {
 				l, changed = to, true
 			}
 			if l == self {
@@ -791,69 +922,169 @@ func (p *planner) rewriteLinks() error {
 				out = append(out, l)
 			}
 		}
-		if !changed {
-			continue
+		if changed {
+			fields := map[string]any{"links": out}
+			if len(out) == 0 {
+				fields["links"] = []string{}
+			}
+			if c, err = setFields(c, fields); err != nil {
+				return fmt.Errorf("restructure %s: %w", rel, err)
+			}
 		}
-		fields := map[string]any{"links": out}
-		if len(out) == 0 {
-			fields["links"] = []string{}
+		newBody := deepLink.ReplaceAllStringFunc(body, func(s string) string {
+			if to, ok := resolve(s[3:len(s)-1], false); ok {
+				return "(#/" + to + ")"
+			}
+			return s
+		})
+		if newBody != body {
+			c, changed = replaceBody(c, newBody), true
 		}
-		if c, err = setFields(c, fields); err != nil {
-			return fmt.Errorf("restructure %s: %w", rel, err)
+		if changed {
+			p.write(rel, c)
 		}
-		p.write(rel, c)
 	}
 	return nil
 }
 
 // --- apply ---
 
-func (s *Service) applyPlan(ctx context.Context, plan Plan) error {
-	var touched []string
+// applyPlan changes the files step by step and records how to undo each step. If any step, the
+// rename log or the commit fails, the steps are undone in reverse: the tree, the rename log and
+// the index are left as they were, and the error says so.
+func (s *Service) applyPlan(ctx context.Context, plan Plan) (err error) {
+	var touched, emptied []string
+	var undo []func() error
 	abs := func(rel string) string { return filepath.Join(s.root, filepath.FromSlash(rel)) }
-	var emptied []string
-	for _, f := range plan.Files {
+	defer func() {
+		if err == nil {
+			return
+		}
+		var failed []string
+		for i := len(undo) - 1; i >= 0; i-- {
+			if uerr := undo[i](); uerr != nil {
+				failed = append(failed, uerr.Error())
+			}
+		}
+		if len(failed) > 0 {
+			s.log.Error("restructure rollback incomplete", "err", strings.Join(failed, "; "))
+			err = fmt.Errorf("%w; rollback incomplete, check the files: %s", err, strings.Join(failed, "; "))
+		}
+	}()
+	// keep restores a path to what it holds now: its bytes, or nothing.
+	keep := func(path string) error {
+		data, rerr := os.ReadFile(path)
+		existed := rerr == nil
+		if rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
+			return fmt.Errorf("restructure: %w", rerr)
+		}
+		undo = append(undo, func() error {
+			if !existed {
+				if rerr := os.Remove(path); rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
+					return rerr
+				}
+				return nil
+			}
+			if merr := os.MkdirAll(filepath.Dir(path), 0o755); merr != nil {
+				return merr
+			}
+			return kb.WriteFile(path, data)
+		})
+		return nil
+	}
+	// mkdir creates a folder and, on rollback, removes the folders it created (if still empty).
+	mkdir := func(dir string) error {
+		var created []string
+		for d := dir; ; d = filepath.Dir(d) {
+			if _, serr := os.Stat(d); serr == nil || d == s.root || d == filepath.Dir(d) {
+				break
+			}
+			created = append(created, d)
+		}
+		if merr := os.MkdirAll(dir, 0o755); merr != nil {
+			return fmt.Errorf("restructure: %w", merr)
+		}
+		undo = append(undo, func() error {
+			for _, d := range created {
+				os.Remove(d)
+			}
+			return nil
+		})
+		return nil
+	}
+	for i, f := range plan.Files {
+		if s.applyHook != nil {
+			if err = s.applyHook(i); err != nil {
+				return err
+			}
+		}
 		switch f.Kind {
 		case "move":
-			if err := os.MkdirAll(filepath.Dir(abs(f.Path)), 0o755); err != nil {
-				return fmt.Errorf("restructure: %w", err)
+			if err = keep(abs(f.From)); err != nil {
+				return err
 			}
-			if err := os.Rename(abs(f.From), abs(f.Path)); err != nil {
+			if err = keep(abs(f.Path)); err != nil {
+				return err
+			}
+			if err = mkdir(filepath.Dir(abs(f.Path))); err != nil {
+				return err
+			}
+			if err = os.Rename(abs(f.From), abs(f.Path)); err != nil {
 				return fmt.Errorf("restructure: move %s: %w", f.From, err)
 			}
-			if err := kb.WriteFile(abs(f.Path), []byte(f.Content)); err != nil {
+			if err = kb.WriteFile(abs(f.Path), []byte(f.Content)); err != nil {
 				return err
 			}
 			touched = append(touched, abs(f.From), abs(f.Path))
 			emptied = append(emptied, filepath.Dir(abs(f.From)))
 		case "write":
-			if err := os.MkdirAll(filepath.Dir(abs(f.Path)), 0o755); err != nil {
-				return fmt.Errorf("restructure: %w", err)
+			if err = keep(abs(f.Path)); err != nil {
+				return err
 			}
-			if err := kb.WriteFile(abs(f.Path), []byte(f.Content)); err != nil {
+			if err = mkdir(filepath.Dir(abs(f.Path))); err != nil {
+				return err
+			}
+			if err = kb.WriteFile(abs(f.Path), []byte(f.Content)); err != nil {
 				return err
 			}
 			touched = append(touched, abs(f.Path))
 		case "delete":
-			if err := os.Remove(abs(f.Path)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			if err = keep(abs(f.Path)); err != nil {
+				return err
+			}
+			if err = os.Remove(abs(f.Path)); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return fmt.Errorf("restructure: delete %s: %w", f.Path, err)
 			}
+			err = nil
 			touched = append(touched, abs(f.Path))
 		}
 	}
-	for _, d := range emptied {
-		os.Remove(d) // only succeeds when a moved sub-theme left its folder empty
+	if s.applyHook != nil {
+		if err = s.applyHook(len(plan.Files)); err != nil {
+			return err
+		}
 	}
+	// The rename log is written last among the files, so a failed step never leaves a rename
+	// pointing at a subject that did not move.
 	if len(plan.Renames) > 0 {
-		if err := s.book.AppendRenames(plan.Renames); err != nil {
+		// Undo runs in reverse: the log file is restored first, then the book replays it.
+		undo = append(undo, func() error { return s.book.Reload() })
+		if err = keep(s.book.RenamesFile()); err != nil {
+			return err
+		}
+		if err = s.book.AppendRenames(plan.Renames); err != nil {
 			return err
 		}
 		touched = append(touched, s.book.RenamesFile())
 	}
 	if s.git != nil {
-		if err := s.git.Commit(ctx, plan.Message, touched...); err != nil {
-			return fmt.Errorf("restructure: files changed but not committed: %w", err)
+		if err = s.git.Commit(ctx, plan.Message, touched...); err != nil {
+			s.git.Unstage(context.WithoutCancel(ctx), touched...)
+			return fmt.Errorf("restructure: commit failed, nothing changed: %w", err)
 		}
+	}
+	for _, d := range emptied {
+		os.Remove(d) // only succeeds when a moved sub-theme left its folder empty
 	}
 	return nil
 }

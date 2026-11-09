@@ -96,7 +96,7 @@ func TestRestructure_MovesASubjectIntoAnotherSubTheme_WithOneCommit(t *testing.T
 	svc, root := restructureRepo(t)
 	before := gitIn(t, root, "rev-list", "--count", "HEAD")
 
-	_, err := svc.Restructure(context.Background(), app.Op{Kind: "move", ID: "tech/k8s/helm", To: "tech/nix"}, false)
+	_, err := svc.Restructure(context.Background(), app.Op{Kind: "move", ID: "tech/k8s/helm", To: "tech/nix"}, false, "")
 
 	require.NoError(t, err)
 	assert.True(t, exists(root, "galaxies/tech/nix/helm.md"))
@@ -125,7 +125,7 @@ func TestRestructure_KeepsReviewHistory_AfterEachOperation(t *testing.T) {
 			reviewed(t, svc, root, tt.question)
 			require.Equal(t, uint64(1), reps(t, svc, root, tt.question))
 
-			_, err := svc.Restructure(context.Background(), tt.op, false)
+			_, err := svc.Restructure(context.Background(), tt.op, false, "")
 
 			require.NoError(t, err)
 			assert.Equal(t, uint64(1), reps(t, svc, root, tt.question), "the card reviewed before must not be new again")
@@ -138,9 +138,9 @@ func TestRestructure_KeepsReviewHistory_WhenANotionIsSplitOutAndMergedBack(t *te
 	reviewed(t, svc, root, "hook?")
 	ctx := context.Background()
 
-	_, err := svc.Restructure(ctx, app.Op{Kind: "split", ID: "tech/k8s/helm", Parts: []app.SplitPart{{ID: "helm-hooks", Notions: []string{"Hooks"}}}}, false)
+	_, err := svc.Restructure(ctx, app.Op{Kind: "split", ID: "tech/k8s/helm", Parts: []app.SplitPart{{ID: "helm-hooks", Notions: []string{"Hooks"}}}}, false, "")
 	require.NoError(t, err)
-	_, err = svc.Restructure(ctx, app.Op{Kind: "merge", Sources: []string{"tech/k8s/helm-hooks", "tech/k8s/helm"}, Into: "tech/k8s/helm"}, false)
+	_, err = svc.Restructure(ctx, app.Op{Kind: "merge", Sources: []string{"tech/k8s/helm-hooks", "tech/k8s/helm"}, Into: "tech/k8s/helm"}, false, "")
 	require.NoError(t, err)
 
 	assert.Equal(t, "tech/k8s/helm", cardID(t, root, "hook?")[:len("tech/k8s/helm")])
@@ -154,7 +154,7 @@ func TestRestructure_KeepsReviewHistory_WhenANotionIsSplitOutAndMergedBack(t *te
 func TestRestructure_RewritesLinksToTheMovedSubject(t *testing.T) {
 	svc, root := restructureRepo(t)
 
-	_, err := svc.Restructure(context.Background(), app.Op{Kind: "move", ID: "tech/k8s/helm", To: "tech/nix/helm-charts"}, false)
+	_, err := svc.Restructure(context.Background(), app.Op{Kind: "move", ID: "tech/k8s/helm", To: "tech/nix/helm-charts"}, false, "")
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"tech/nix/helm-charts"}, links(t, root, "galaxies/tech/k8s/argo.md"))
@@ -167,7 +167,7 @@ func TestRestructure_RewritesLinksToTheMovedSubject(t *testing.T) {
 func TestRestructure_OpensOldIdsThroughRedirects(t *testing.T) {
 	svc, _ := restructureRepo(t)
 
-	_, err := svc.Restructure(context.Background(), app.Op{Kind: "move", ID: "tech/k8s/helm", To: "tech/nix"}, false)
+	_, err := svc.Restructure(context.Background(), app.Op{Kind: "move", ID: "tech/k8s/helm", To: "tech/nix"}, false, "")
 
 	require.NoError(t, err)
 	v, err := svc.Star("tech/k8s/helm")
@@ -179,7 +179,7 @@ func TestRestructure_OpensOldIdsThroughRedirects(t *testing.T) {
 func TestRestructure_KeepsGitHistoryOfTheMovedFile(t *testing.T) {
 	svc, root := restructureRepo(t)
 
-	_, err := svc.Restructure(context.Background(), app.Op{Kind: "move", ID: "tech/k8s/helm", To: "tech/nix"}, false)
+	_, err := svc.Restructure(context.Background(), app.Op{Kind: "move", ID: "tech/k8s/helm", To: "tech/nix"}, false, "")
 
 	require.NoError(t, err)
 	log := gitIn(t, root, "log", "--follow", "--format=%s", "--", "galaxies/tech/nix/helm.md")
@@ -189,7 +189,7 @@ func TestRestructure_KeepsGitHistoryOfTheMovedFile(t *testing.T) {
 func TestRestructure_DryRunChangesNothing(t *testing.T) {
 	svc, root := restructureRepo(t)
 
-	plan, err := svc.Restructure(context.Background(), app.Op{Kind: "merge", Sources: []string{"tech/k8s/argo", "tech/k8s/helm"}}, true)
+	plan, err := svc.Restructure(context.Background(), app.Op{Kind: "merge", Sources: []string{"tech/k8s/argo", "tech/k8s/helm"}}, true, "")
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, plan.Files)
@@ -201,7 +201,7 @@ func TestRestructure_DryRunChangesNothing(t *testing.T) {
 func TestRestructure_MergeKeepsTheHighestLevel(t *testing.T) {
 	svc, root := restructureRepo(t)
 
-	_, err := svc.Restructure(context.Background(), app.Op{Kind: "merge", Sources: []string{"tech/k8s/helm", "tech/k8s/argo"}, Into: "tech/k8s/argo"}, false)
+	_, err := svc.Restructure(context.Background(), app.Op{Kind: "merge", Sources: []string{"tech/k8s/helm", "tech/k8s/argo"}, Into: "tech/k8s/argo"}, false, "")
 
 	require.NoError(t, err)
 	v, err := svc.Star("tech/k8s/argo")
@@ -215,7 +215,7 @@ func TestRestructure_MergeKeepsTheHighestLevel(t *testing.T) {
 func TestRestructure_SplitMovesNotionsWithTheirCards(t *testing.T) {
 	svc, _ := restructureRepo(t)
 
-	_, err := svc.Restructure(context.Background(), app.Op{Kind: "split", ID: "tech/k8s/helm", Parts: []app.SplitPart{{ID: "helm-hooks", Notions: []string{"hooks"}}}}, false)
+	_, err := svc.Restructure(context.Background(), app.Op{Kind: "split", ID: "tech/k8s/helm", Parts: []app.SplitPart{{ID: "helm-hooks", Notions: []string{"hooks"}}}}, false, "")
 
 	require.NoError(t, err)
 	part, err := svc.Star("tech/k8s/helm-hooks")
@@ -248,7 +248,7 @@ func TestRestructure_RefusesBadOperations(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc, root := restructureRepo(t)
 
-			_, err := svc.Restructure(context.Background(), tt.op, false)
+			_, err := svc.Restructure(context.Background(), tt.op, false, "")
 
 			require.Error(t, err)
 			assert.Empty(t, gitIn(t, root, "status", "--porcelain"))
@@ -261,7 +261,7 @@ func TestRestructure_RefusesAMergeWhereOneQuestionHasTwoAnswers(t *testing.T) {
 	p := filepath.Join(root, "galaxies/tech/k8s/argo.md")
 	require.NoError(t, os.WriteFile(p, []byte("---\nname: Argo\nlevel: 2\n---\nGitOps.\n\nhelm? :: a chart tool\n"), 0o644))
 
-	_, err := svc.Restructure(context.Background(), app.Op{Kind: "merge", Sources: []string{"tech/k8s/helm", "tech/k8s/argo"}}, false)
+	_, err := svc.Restructure(context.Background(), app.Op{Kind: "merge", Sources: []string{"tech/k8s/helm", "tech/k8s/argo"}}, false, "")
 
 	assert.ErrorIs(t, err, app.ErrInvalid)
 }
@@ -289,7 +289,7 @@ func TestRestructure_KeepsNotionVectorsCachedAcrossAMove(t *testing.T) {
 		before[c.Hash] = true
 	}
 
-	_, err = svc.Restructure(context.Background(), app.Op{Kind: "move", ID: "tech/k8s/helm", To: "tech/k8s/helm-charts"}, false)
+	_, err = svc.Restructure(context.Background(), app.Op{Kind: "move", ID: "tech/k8s/helm", To: "tech/k8s/helm-charts"}, false, "")
 
 	require.NoError(t, err)
 	u, _, err = kb.Load(root)
@@ -302,7 +302,7 @@ func TestRestructure_KeepsNotionVectorsCachedAcrossAMove(t *testing.T) {
 func TestRestructure_RecordsRenamesWithTheirTime(t *testing.T) {
 	svc, root := restructureRepo(t)
 
-	plan, err := svc.Restructure(context.Background(), app.Op{Kind: "move", ID: "tech/k8s/helm", To: "tech/nix"}, false)
+	plan, err := svc.Restructure(context.Background(), app.Op{Kind: "move", ID: "tech/k8s/helm", To: "tech/nix"}, false, "")
 
 	require.NoError(t, err)
 	require.Len(t, plan.Renames, 1)
