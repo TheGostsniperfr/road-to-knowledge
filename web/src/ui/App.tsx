@@ -8,6 +8,7 @@ import { Review } from "./Review";
 import { Right } from "./Right";
 import { dueIn, excluded, scopeOf } from "./scope";
 import { applyTheme, prefs, type Mode, type ViewName } from "./prefs";
+import { TermsContext, termsFor } from "./terms";
 
 type MapView = Sky | AtlasView;
 
@@ -83,7 +84,9 @@ export function App() {
   const crumbs = selected ? pathOf(selected) : [];
   const problems = universe?.problems ?? [];
 
+  const t = termsFor(view);
   return (
+    <TermsContext.Provider value={{ view, t }}>
     <div class="app">
       <Left universe={universe} selected={selected} go={go} />
       <div class="center">
@@ -98,13 +101,13 @@ export function App() {
         {!webgl && <p class="nogl">WebGL2 indisponible : seules les étoiles de connaissance sont dessinées.</p>}
         <div class="hud">
           <nav class="crumbs glass" aria-label="Position">
-            <button onClick={() => sky.current?.select(null, true)}>Univers</button>
+            <button onClick={() => sky.current?.select(null, true)}>{t.root}</button>
             {crumbs.map((n) => <span key={n.id} style={{ display: "contents" }}><span>›</span><button onClick={() => go(n.id)}>{n.name}</button></span>)}
           </nav>
           <div class="tools">
             <div class="seg glass" role="group" aria-label="Zoom">
               <button aria-label="Dézoomer" onClick={() => sky.current?.zoomBy(1 / 1.8)}>−</button>
-              <button onClick={() => sky.current?.select(null, true)}>Univers</button>
+              <button onClick={() => sky.current?.select(null, true)}>{t.root}</button>
               <button aria-label="Zoomer" onClick={() => sky.current?.zoomBy(1.8)}>+</button>
             </div>
             <span class="lvl glass">{scale}</span>
@@ -146,5 +149,6 @@ export function App() {
       </div>
       <Right universe={universe} selected={selected} go={go} review={() => setReviewing(true)} />
     </div>
+    </TermsContext.Provider>
   );
 }
