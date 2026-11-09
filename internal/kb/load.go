@@ -34,6 +34,7 @@ type starMeta struct {
 	Evidence []string `yaml:"evidence"`
 	Tags     []string `yaml:"tags"`
 	Reviewed string   `yaml:"reviewed"`
+	Source   *Source  `yaml:"source"`
 }
 
 // Load reads every node under root/galaxies. It returns problems instead of failing on a single bad file.
@@ -120,6 +121,13 @@ func Load(root string) (*Universe, []Problem, error) {
 				s := &Star{ID: sid, Name: sm.Name, Level: sm.Level, State: sm.State, Links: sm.Links, Evidence: sm.Evidence, Tags: sm.Tags, Body: body, Path: f, Cluster: c}
 				if s.Name == "" {
 					s.Name = strings.TrimSuffix(filepath.Base(f), ".md")
+				}
+				if sm.Source != nil {
+					if bad := sm.Source.Problems(); len(bad) > 0 {
+						report(f, "%s", strings.Join(bad, "; "))
+					} else {
+						s.Source = sm.Source
+					}
 				}
 				if s.Level < 0 || s.Level > 5 {
 					report(f, "level must be between 0 and 5, got %d", s.Level)
