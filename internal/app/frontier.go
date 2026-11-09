@@ -52,7 +52,16 @@ func isCandidate(s *kb.Star) bool {
 // Near and two-hop suggestions come from the scope. Off-piste ones are subjects with no known neighbour:
 // those of the scope itself, and those one level above it, so a cluster scope can point to a
 // neighbouring cluster and a galaxy scope to another galaxy.
+// Similar finds the known subject closest in meaning to s, when one is close enough to count.
+type Similar func(s *kb.Star) (known *kb.Star, score float32, ok bool)
+
 func Frontier(u *kb.Universe, scope string, limit int) (FrontierView, error) {
+	return FrontierWith(u, scope, limit, nil)
+}
+
+// FrontierWith also uses meaning: a subject with no link to what you know, but close to it by
+// meaning, counts as two steps away instead of off piste.
+func FrontierWith(u *kb.Universe, scope string, limit int, similar Similar) (FrontierView, error) {
 	if limit <= 0 {
 		limit = DefaultFrontierLimit
 	}
@@ -79,6 +88,13 @@ func Frontier(u *kb.Universe, scope string, limit int) (FrontierView, error) {
 				sg.Bucket, sg.Reason, sg.score = BucketTwoHops, reason, score
 				twoHops = append(twoHops, sg)
 				continue
+			}
+			if similar != nil {
+				if k, sim, ok := similar(s); ok {
+					sg.Bucket, sg.Reason, sg.score = BucketTwoHops, fmt.Sprintf("proche de %s par le sens", k.Name), float64(k.Level)*float64(sim)
+					twoHops = append(twoHops, sg)
+					continue
+				}
 			}
 		}
 		cov := coverage(s.Cluster)
@@ -329,5 +345,5 @@ func plural(n int) string {
 
 func (s *Service) Frontier(scope string, limit int) (FrontierView, error) {
 	u, _, _, _ := s.snapshot()
-	return Frontier(u, strings.Trim(scope, "/"), limit)
+	return FrontierWith(u, strings.Trim(scope, "/"), limit, s.similar(u))
 }
