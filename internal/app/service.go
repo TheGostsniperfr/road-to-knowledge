@@ -204,6 +204,7 @@ func (s *Service) SetMeta(ctx context.Context, id string, level *int, state *kb.
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	u, _, _, _ := s.snapshot()
+	id = s.live(u, id)
 	st := u.Star(id)
 	if st == nil {
 		return StarView{}, fmt.Errorf("star %q: %w", id, ErrNotFound)

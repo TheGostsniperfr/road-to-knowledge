@@ -309,6 +309,7 @@ var ErrSemanticOff = errors.New("search by meaning is not ready: see the status,
 // you could add, or what to read next.
 func (s *Service) Neighbors(id string, limit int) ([]NeighborView, error) {
 	u, _, _, _ := s.snapshot()
+	id = s.live(u, id)
 	st := u.Star(id)
 	if st == nil {
 		return nil, ErrNotFound
