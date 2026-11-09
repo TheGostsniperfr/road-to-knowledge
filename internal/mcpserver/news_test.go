@@ -23,9 +23,11 @@ import (
 func TestNews_ReturnsRecentItemsWithTheSubjectsTheyMention(t *testing.T) {
 	pub := time.Now().Add(-3 * time.Hour).UTC().Format(time.RFC1123Z)
 	old := time.Now().AddDate(0, 0, -5).UTC().Format(time.RFC1123Z)
+	older := time.Now().Add(-5 * time.Hour).UTC().Format(time.RFC1123Z)
 	feed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<rss version="2.0"><channel><title>K8s</title>
 <item><title>gVisor on GKE</title><link>https://example.com/gvisor</link><pubDate>` + pub + `</pubDate></item>
+<item><title>Scheduling news for K8s</title><link>https://example.com/sched</link><pubDate>` + older + `</pubDate></item>
 <item><title>gVisor history</title><link>https://example.com/old</link><pubDate>` + old + `</pubDate></item>
 </channel></rss>`))
 	}))
@@ -61,9 +63,10 @@ func TestNews_ReturnsRecentItemsWithTheSubjectsTheyMention(t *testing.T) {
 		Feeds int `json:"feeds"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(out), &got))
-	require.Len(t, got.Items, 1, "the default window is two days")
+	require.Len(t, got.Items, 2, "the default window is two days")
 	assert.Equal(t, "gVisor on GKE", got.Items[0].Title)
 	assert.Equal(t, []string{"gVisor (level 2)"}, got.Items[0].Subjects)
+	assert.Equal(t, []string{"k8s (sub-theme, best level 2)"}, got.Items[1].Subjects, "a sub-theme name counts as a match")
 	assert.Equal(t, 1, got.Feeds)
 }
 
