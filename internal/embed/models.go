@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
+	"time"
 )
 
 // File is one file of a model, pinned by revision and hash so a download can never change under us.
@@ -88,6 +90,12 @@ func Lookup(id string) (Spec, error) {
 	return s, nil
 }
 
+// Fingerprint is a short hash of everything that shapes a vector besides the text.
+func (s Spec) Fingerprint() string {
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s|%q|%q|%d|%d", s.Repo, s.Revision, s.Onnx, s.Output, s.QueryPrefix, s.DocPrefix, s.Dims, s.Truncate)))
+	return hex.EncodeToString(h[:4])
+}
+
 // Size is the download size of the model, in bytes.
 func (s Spec) Size() int64 {
 	var n int64
@@ -148,6 +156,12 @@ func (s Spec) Pull(ctx context.Context, progress func(file string, done, total i
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("embed: %w", err)
 	}
+	// A pull killed halfway leaves its temp file behind; nothing else writes .pull-* here.
+	if stale, _ := filepath.Glob(filepath.Join(dir, ".pull-*")); len(stale) > 0 {
+		for _, f := range stale {
+			os.Remove(f)
+		}
+	}
 	for _, f := range s.Files {
 		dst := filepath.Join(dir, path.Base(f.Path))
 		if st, err := os.Stat(dst); err == nil && st.Size() == f.Size {
@@ -161,12 +175,54 @@ func (s Spec) Pull(ctx context.Context, progress func(file string, done, total i
 	return nil
 }
 
+// client bounds connecting and waiting for headers, not the body: a 1.2 GB file on a slow link
+// may legitimately take a long time once it flows.
+var client = &http.Client{Transport: &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	DialContext:           (&net.Dialer{Timeout: 15 * time.Second}).DialContext,
+	TLSHandshakeTimeout:   15 * time.Second,
+	ResponseHeaderTimeout: 30 * time.Second,
+}}
+
+// Verify rehashes every file on disk and deletes those that do not match their pin, so the next
+// Pull downloads them again. It returns the files it removed.
+func (s Spec) Verify() ([]string, error) {
+	dir, err := s.Dir()
+	if err != nil {
+		return nil, err
+	}
+	var bad []string
+	for _, f := range s.Files {
+		p := filepath.Join(dir, path.Base(f.Path))
+		fh, err := os.Open(p)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return bad, fmt.Errorf("embed: verify %s: %w", f.Path, err)
+		}
+		h := sha256.New()
+		_, err = io.Copy(h, fh)
+		fh.Close()
+		if err != nil {
+			return bad, fmt.Errorf("embed: verify %s: %w", f.Path, err)
+		}
+		if hex.EncodeToString(h.Sum(nil)) != f.SHA256 {
+			if err := os.Remove(p); err != nil {
+				return bad, fmt.Errorf("embed: verify %s: %w", f.Path, err)
+			}
+			bad = append(bad, f.Path)
+		}
+	}
+	return bad, nil
+}
+
 func download(ctx context.Context, url, dst string, f File, progress func(string, int64, int64)) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("embed: %w", err)
 	}
-	res, err := http.DefaultClient.Do(req)
+	res, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("embed: download %s: %w", f.Path, err)
 	}
@@ -203,6 +259,10 @@ func download(ctx context.Context, url, dst string, f File, progress func(string
 			tmp.Close()
 			return fmt.Errorf("embed: download %s: %w", f.Path, rerr)
 		}
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("embed: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("embed: %w", err)

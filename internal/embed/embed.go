@@ -19,6 +19,9 @@ type Embedder interface {
 	// Embed returns one L2-normalised vector per text, all of length Dims().
 	Embed(ctx context.Context, texts []string, kind Kind) ([][]float32, error)
 	Model() string
+	// Fingerprint changes whenever the same text would get a different vector (revision,
+	// prefixes, dimensions), so cached vectors never mix two ways of embedding.
+	Fingerprint() string
 	Dims() int
 }
 

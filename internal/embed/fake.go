@@ -21,6 +21,8 @@ const fakeDims = 512
 func (f *Fake) Model() string { return "fake" }
 func (f *Fake) Dims() int     { return fakeDims }
 
+func (f *Fake) Fingerprint() string { return "v1" }
+
 func (f *Fake) Embed(ctx context.Context, texts []string, _ Kind) ([][]float32, error) {
 	f.Texts.Add(int64(len(texts)))
 	out := make([][]float32, len(texts))
