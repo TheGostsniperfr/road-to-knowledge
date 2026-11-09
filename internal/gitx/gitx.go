@@ -8,11 +8,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -56,9 +58,19 @@ func run(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	// Hooks and signers are grandchildren of git: killing git alone leaves them holding the
+	// output pipes, and Run would wait on them while r.mu stays locked. Kill the whole group,
+	// and stop waiting for the pipes shortly after.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = 2 * time.Second
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	start := time.Now()
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			removeOwnLock(dir, start)
+		}
 		msg := strings.TrimSpace(stderr.String())
 		if args[0] == "commit" && (strings.Contains(msg, "gpg failed to sign") || ctx.Err() != nil) {
 			msg += signingHint
@@ -66,6 +78,24 @@ func run(ctx context.Context, dir string, args ...string) (string, error) {
 		return "", fmt.Errorf("git %s: %w: %s", args[0], err, msg)
 	}
 	return stdout.String(), nil
+}
+
+// removeOwnLock deletes the index.lock left by a git process we killed. A lock older than that
+// process belongs to someone else and stays.
+func removeOwnLock(dir string, start time.Time) {
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "--git-path", "index.lock").Output()
+	if err != nil {
+		return
+	}
+	lock := strings.TrimSpace(string(out))
+	if !filepath.IsAbs(lock) {
+		lock = filepath.Join(dir, lock)
+	}
+	if fi, err := os.Stat(lock); err == nil && !fi.ModTime().Before(start.Add(-time.Second)) {
+		if err := os.Remove(lock); err != nil {
+			slog.Warn("git: remove stale lock", "lock", lock, "err", err)
+		}
+	}
 }
 
 // Commit stages exactly the given paths and commits them; it is a no-op when nothing changed.
@@ -154,9 +184,17 @@ func (r *Repo) Propose(ctx context.Context, slug, message string, files []FileCh
 	}
 	defer func() {
 		bg := context.WithoutCancel(ctx)
-		r.git(bg, "worktree", "remove", "--force", tmp)
+		if _, cerr := r.git(bg, "worktree", "remove", "--force", tmp); cerr != nil {
+			slog.Warn("propose: remove worktree", "dir", tmp, "err", cerr)
+			os.RemoveAll(tmp)
+			if _, perr := r.git(bg, "worktree", "prune"); perr != nil {
+				slog.Warn("propose: prune worktrees", "err", perr)
+			}
+		}
 		if err != nil && created {
-			r.git(bg, "branch", "-D", name)
+			if _, cerr := r.git(bg, "branch", "-D", name); cerr != nil {
+				slog.Warn("propose: delete refused branch", "branch", name, "err", cerr)
+			}
 		}
 	}()
 	rel := make([]string, 0, len(files))
@@ -196,11 +234,14 @@ type Commit struct {
 	Date    string   `json:"date"`
 	Subject string   `json:"subject"`
 	Files   []string `json:"files"`
+	More    int      `json:"more_files,omitempty"`
 }
+
+const maxLogFiles = 8
 
 // Log lists commits of the current branch since t, newest first, with the files each one touched.
 func (r *Repo) Log(ctx context.Context, since time.Time, limit int) ([]Commit, error) {
-	out, err := r.git(ctx, "log", "--since="+since.Format(time.RFC3339), fmt.Sprintf("--max-count=%d", limit), "--name-only", "--format=%x00%h%x1f%cs%x1f%s")
+	out, err := r.git(ctx, "-c", "core.quotePath=false", "log", "--since="+since.Format(time.RFC3339), fmt.Sprintf("--max-count=%d", limit), "--name-only", "--format=%x00%h%x1f%cs%x1f%s")
 	if err != nil {
 		return nil, err
 	}
@@ -213,9 +254,15 @@ func (r *Repo) Log(ctx context.Context, since time.Time, limit int) ([]Commit, e
 		}
 		c := Commit{Hash: head[0], Date: head[1], Subject: head[2], Files: []string{}}
 		for _, f := range lines[1:] {
-			if f = strings.TrimSpace(f); f != "" {
-				c.Files = append(c.Files, f)
+			if f = strings.TrimSpace(f); f == "" {
+				continue
 			}
+			// A seed commit touches dozens of files: the count is enough past the first few.
+			if len(c.Files) == maxLogFiles {
+				c.More++
+				continue
+			}
+			c.Files = append(c.Files, f)
 		}
 		commits = append(commits, c)
 	}
