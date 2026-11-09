@@ -2,17 +2,26 @@ import { describe, expect, it } from "vitest";
 import type { RestructurePlan, UniverseView } from "../api";
 import { afterPlan, liveId, slugify, subThemes } from "./reorg";
 
+const uni = (stars: string[], redirects: Record<string, string>): UniverseView => ({
+  version: 1, inbox: 0, problems: [], redirects,
+  galaxies: [{ id: "tech", name: "Tech", clusters: [{ id: "tech/k8s", name: "K8s", stars: stars.map((id) => ({ id })) }] }],
+} as unknown as UniverseView);
+
 describe("liveId", () => {
   it("opens a moved subject at its new id", () => {
-    expect(liveId("tech/k8s/helm", { "tech/k8s/helm": "tech/nix/helm" })).toBe("tech/nix/helm");
+    expect(liveId("tech/k8s/helm", uni(["tech/k8s/helm-v2"], { "tech/k8s/helm": "tech/k8s/helm-v2" }))).toBe("tech/k8s/helm-v2");
   });
 
   it("keeps the notion part of a deep link", () => {
-    expect(liveId("tech/k8s/helm#hooks", { "tech/k8s/helm": "tech/nix/helm" })).toBe("tech/nix/helm#hooks");
+    expect(liveId("tech/k8s/helm#hooks", uni(["tech/k8s/helm-v2"], { "tech/k8s/helm": "tech/k8s/helm-v2" }))).toBe("tech/k8s/helm-v2#hooks");
+  });
+
+  it("never redirects an id that a subject has again today", () => {
+    expect(liveId("tech/k8s/helm", uni(["tech/k8s/helm", "tech/k8s/helm-v2"], { "tech/k8s/helm": "tech/k8s/helm-v2" }))).toBe("tech/k8s/helm");
   });
 
   it("leaves ids that were never renamed alone", () => {
-    expect(liveId("tech/k8s/argo", { "tech/k8s/helm": "tech/nix/helm" })).toBe("tech/k8s/argo");
+    expect(liveId("tech/k8s/argo", uni(["tech/k8s/argo"], { "tech/k8s/helm": "tech/k8s/helm-v2" }))).toBe("tech/k8s/argo");
   });
 });
 
@@ -24,7 +33,7 @@ describe("slugify", () => {
 });
 
 describe("afterPlan", () => {
-  const plan = (renames: { from: string; to: string }[]): RestructurePlan => ({ op: { kind: "move" }, files: [], renames: renames.map((r) => ({ ...r, at: "" })), summary: [], message: "" });
+  const plan = (renames: { from: string; to: string }[]): RestructurePlan => ({ op: { kind: "move" }, files: [], renames: renames.map((r) => ({ ...r, at: "" })), summary: [], message: "", hash: "" });
 
   it("follows the subject when the plan renames it", () => {
     expect(afterPlan("a/b/c", plan([{ from: "a/b/c", to: "a/d/c" }]))).toBe("a/d/c");

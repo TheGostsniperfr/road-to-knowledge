@@ -48,14 +48,18 @@ export function Reorganize({ star, universe, done }: { star: StarView; universe:
     setBusy(true);
     setErr("");
     try {
-      const p = await restructureApi.run(o, dry);
+      // Applying sends the hash of the plan on screen: the server refuses if the files changed since.
+      const p = await restructureApi.run(o, dry, dry ? "" : plan?.hash ?? "");
       if (dry) setPlan(p);
       else {
         setPlan(null);
         await done(afterPlan(star.id, p));
       }
     } catch (e) {
-      setErr(String(e));
+      if (!dry && String(e).includes("plan changed")) {
+        setPlan(await restructureApi.run(o, true).catch(() => null));
+        setErr("Les fichiers ont changé depuis ce plan : relis le nouveau plan avant d'appliquer.");
+      } else setErr(String(e));
     } finally {
       setBusy(false);
     }
