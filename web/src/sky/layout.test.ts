@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GalaxyView, UniverseView } from "../api";
-import { buildLayout } from "./layout";
+import { buildLayout, currentPins } from "./layout";
 
 function galaxy(id: string, shape: string, clusters: number, stars = 3): GalaxyView {
   return {
@@ -57,5 +57,33 @@ describe("buildLayout", () => {
     const { stars } = buildLayout(universe([g]));
 
     expect(stars[0].links.map((s) => s.id)).toEqual(["lang/c0/s1"]);
+  });
+
+  it("keeps pinned galaxies fixed when a theme is added", () => {
+    const gs = [galaxy("tech", "barred", 4), galaxy("lang", "spiral", 3), galaxy("ia", "spiral", 2)];
+    const pins = currentPins(buildLayout(universe(gs)));
+    const pinnedGs = gs.map((g) => ({ ...g, pin: pins[g.id] }));
+
+    const after = buildLayout(universe([...pinnedGs, galaxy("cook", "spiral", 6, 8)]));
+
+    for (const g of after.galaxies.filter((g) => g.id !== "cook")) expect([g.x, g.y]).toEqual([pins[g.id].x, pins[g.id].y]);
+  });
+
+  it("places a new galaxy away from pinned ones", () => {
+    const gs = [galaxy("tech", "barred", 4), galaxy("lang", "spiral", 3)];
+    const pins = currentPins(buildLayout(universe(gs)));
+
+    const { galaxies } = buildLayout(universe([...gs.map((g) => ({ ...g, pin: pins[g.id] })), galaxy("cook", "spiral", 6, 8)]));
+
+    const cook = galaxies.find((g) => g.id === "cook")!;
+    for (const g of galaxies) if (g !== cook) expect(Math.hypot(g.x - cook.x, g.y - cook.y)).toBeGreaterThan((g.R + cook.R) * 1.1);
+  });
+
+  it("uses the pinned rotation when there is one", () => {
+    const g = { ...galaxy("tech", "barred", 2), pin: { x: 0, y: 0, rotation: 0 } };
+
+    const { galaxies } = buildLayout(universe([g]));
+
+    expect([galaxies[0].ct, galaxies[0].st]).toEqual([1, 0]);
   });
 });

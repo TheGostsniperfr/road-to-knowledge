@@ -19,6 +19,8 @@ export interface ClusterView { id: string; name: string; stars: StarSummary[] }
 
 export interface Discovery { near: number; two_hops: number; off_piste: number; news: boolean }
 
+export interface Pin { x: number; y: number; rotation?: number }
+
 export interface GalaxyView {
   id: string;
   name: string;
@@ -26,6 +28,7 @@ export interface GalaxyView {
   shape: string;
   review_after_days: number;
   discovery: Discovery;
+  pin?: Pin;
   clusters: ClusterView[];
 }
 
@@ -79,6 +82,8 @@ export const api = {
   universe: () => req<UniverseView>("GET", "/api/universe"),
   star: (id: string) => req<StarView>("GET", `/api/star/${enc(id)}`),
   setMeta: (id: string, patch: { level?: number; state?: State }) => req<StarView>("PATCH", `/api/star/${enc(id)}`, patch),
+  setGalaxy: (id: string, patch: { review_after_days?: number; discovery?: Discovery }) => req<GalaxyView>("PATCH", `/api/galaxy/${encodeURIComponent(id)}`, patch),
+  setLayout: (galaxies: Record<string, Pin>) => req<UniverseView>("PUT", "/api/layout", { galaxies }),
   search: (q: string) => req<Hit[]>("GET", `/api/search?q=${encodeURIComponent(q)}`),
   due: (scope: string, exclude: string[]) => req<DueCard[]>("GET", `/api/review/due?scope=${encodeURIComponent(scope)}&exclude=${encodeURIComponent(exclude.join(","))}`),
   review: (card: string, rating: number) => req<void>("POST", "/api/review", { card, rating }),
