@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api, type DueCard, type UniverseView } from "../api";
 import { excluded, scopeChildren } from "./scope";
+import { useTerms } from "./terms";
 
 const GRADES: [number, string][] = [[1, "À revoir"], [2, "Difficile"], [3, "Bien"], [4, "Facile"]];
 
 export function Review({ universe, scope, onClose }: { universe: UniverseView | null; scope: { id: string; name: string }; onClose: () => void }) {
+  const { t } = useTerms();
   const [ex, setEx] = useState<string[]>(() => excluded.get(scope.id));
   const [deck, setDeck] = useState<DueCard[] | null>(null);
   const [i, setI] = useState(0);
@@ -67,7 +69,7 @@ export function Review({ universe, scope, onClose }: { universe: UniverseView | 
             <input type="checkbox" checked={!ex.includes(k.id)} onChange={(e) => toggle(k.id, e.currentTarget.checked)} />
             {k.name}<span class="n">{k.due}</span>
           </label>
-        )) : <p class="kbd">Une seule étoile dans ce périmètre.</p>}
+        )) : <p class="kbd">{t.oneInScope}</p>}
         <p class="kbd">Choix retenu sur cet appareil seulement.</p>
       </div>
       <div class="cardv">

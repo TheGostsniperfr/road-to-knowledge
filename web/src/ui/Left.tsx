@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api, type Bucket, type FrontierView, type Hit, type InboxItem, type UniverseView } from "../api";
 import type { SkyNode } from "../sky/engine";
+import { useTerms } from "./terms";
 
 type Tab = "plan" | "todo" | "inbox";
 
@@ -65,8 +66,9 @@ export function Left({ universe, selected, go }: { universe: UniverseView | null
 }
 
 function Tree({ universe, selId, open, go }: { universe: UniverseView | null; selId?: string; open: Set<string>; go: (id: string) => void }) {
+  const { t } = useTerms();
   if (!universe) return <p class="empty">Chargement…</p>;
-  if (!universe.galaxies.length) return <p class="empty">Aucune galaxie. Ajoute un dossier dans galaxies/ ou lance la skill seed.</p>;
+  if (!universe.galaxies.length) return <p class="empty">{t.noTheme}</p>;
   return (
     <div class="tree">
       {universe.galaxies.map((g) => (
@@ -83,7 +85,7 @@ function Tree({ universe, selId, open, go }: { universe: UniverseView | null; se
                 <div key={s.id}>
                   <button class={`item${selId === s.id ? " sel" : ""}`} onClick={() => go(s.id)}>
                     {dot(s, g.hue)}<span>{s.name}</span>
-                    {s.links?.length ? <span class="n" title="trous de ver">⟡</span> : s.state === "progress" ? <span class="n">en cours</span> : null}
+                    {s.links?.length ? <span class="n" title={t.links}>⟡</span> : s.state === "progress" ? <span class="n">en cours</span> : null}
                   </button>
                   {open.has(s.id) && s.planets?.map((p) => (
                     <button key={p.id} class={`item pl${selId === p.id ? " sel" : ""}`} onClick={() => go(p.id)}>○ {p.name}</button>
@@ -120,7 +122,7 @@ const buckets: { key: Bucket; label: string }[] = [
 
 // The frontier follows the selection down to its sub-theme; the chips widen it back.
 function scopesOf(universe: UniverseView, selected: SkyNode | null) {
-  const out = [{ id: "", name: "Univers" }];
+  const out = [{ id: "", name: "Tout" }];
   if (!selected) return out;
   const parts = selected.id.split("#")[0].split("/");
   const g = universe.galaxies.find((x) => x.id === parts[0]);
@@ -132,6 +134,7 @@ function scopesOf(universe: UniverseView, selected: SkyNode | null) {
 }
 
 function Todo({ universe, selected, go }: { universe: UniverseView | null; selected: SkyNode | null; go: (id: string) => void }) {
+  const { t } = useTerms();
   const scopes = universe ? scopesOf(universe, selected) : [];
   const deepest = scopes[scopes.length - 1]?.id ?? "";
   const [scope, setScope] = useState(deepest);
@@ -174,7 +177,7 @@ function Todo({ universe, selected, go }: { universe: UniverseView | null; selec
     return (
       <div>
         {chips}
-        {!items.length && <p class="empty">Rien en attente. Le brouillard est dissipé.</p>}
+        {!items.length && <p class="empty">{t.allExplored}</p>}
         {items.map(({ s, g }) => (
           <div key={s.id} class="todo">
             {dot(s, g.hue)}

@@ -4,6 +4,7 @@ import { renderMarkdown, renderMermaid, section } from "../markdown";
 import type { SkyNode } from "../sky/engine";
 import { buildLayout, currentPins } from "../sky/layout";
 import { SHARES, STEP, rebalance } from "./discovery";
+import { useTerms } from "./terms";
 
 const LEVELS = ["Brouillard", "Entendu parler", "Compris", "Pratiqué en lab", "Maîtrisé en prod", "Je peux l'enseigner"];
 const STATES: [State, string][] = [["idea", "Idée"], ["explore", "À explorer"], ["progress", "En cours"], ["acquired", "Acquis"]];
@@ -22,22 +23,23 @@ export function Right(props: { universe: UniverseView | null; selected: SkyNode 
 }
 
 function Fiche({ universe, selected, go, review }: { universe: UniverseView | null; selected: SkyNode | null; go: (id: string) => void; review: () => void }) {
+  const { t, view } = useTerms();
   if (!universe) return <p>Chargement…</p>;
   if (!selected) {
     const stars = universe.galaxies.flatMap((g) => g.clusters.flatMap((c) => c.stars));
     const strongest = [...stars].filter((s) => s.level >= 4).slice(0, 3);
     return (
       <>
-        <span class="path">Univers</span>
-        <h3>Ton univers</h3>
-        <p>{stars.filter((s) => s.level > 0).length} étoiles explorées, {stars.filter((s) => s.level === 0).length} dans le brouillard, {universe.galaxies.reduce((a, g) => a + g.clusters.length, 0)} amas, {universe.galaxies.length} galaxies.</p>
+        <span class="path">{t.root}</span>
+        <h3>{t.rootTitle}</h3>
+        <p>{t.summary(stars.filter((s) => s.level > 0).length, stars.filter((s) => s.level === 0).length)}, {t.counts(universe.galaxies.reduce((a, g) => a + g.clusters.length, 0), universe.galaxies.length)}</p>
         {strongest.length > 0 && (
-          <div class="blk"><span class="k">Tes étoiles les plus brillantes</span>
+          <div class="blk"><span class="k">{t.strongest}</span>
             <div class="row">{strongest.map((s) => <button key={s.id} class="btn ghost" onClick={() => go(s.id)}>{s.name}</button>)}</div>
           </div>
         )}
-        <PinMap universe={universe} />
-        <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>Clique une galaxie pour y plonger. Les fiches sont des fichiers Markdown dans ton repo : écris-les dans ton éditeur, la carte se met à jour seule.</p>
+        {view === "galaxy" && <PinMap universe={universe} />}
+        <p style={{ fontSize: ".78rem", color: "var(--muted)" }}>{t.hint} Les fiches sont des fichiers Markdown dans ton repo : écris-les dans ton éditeur, la carte se met à jour seule.</p>
       </>
     );
   }
@@ -45,9 +47,9 @@ function Fiche({ universe, selected, go, review }: { universe: UniverseView | nu
     const g = selected.data, stars = g.clusters.flatMap((c) => c.stars);
     return (
       <>
-        <span class="path">Galaxie</span>
+        <span class="path">{t.theme}</span>
         <h3>{g.name}</h3>
-        <p>{stars.filter((s) => s.level > 0).length} étoiles explorées, {stars.filter((s) => s.level === 0).length} dans le brouillard, {stars.reduce((a, s) => a + s.cards, 0)} cartes.</p>
+        <p>{t.summary(stars.filter((s) => s.level > 0).length, stars.filter((s) => s.level === 0).length)}, {stars.reduce((a, s) => a + s.cards, 0)} cartes.</p>
         <div class="blk"><span class="k">Sous-thèmes</span>
           {g.clusters.map((c) => <button key={c.id} class="worm plain" onClick={() => go(c.id)}>{c.name}<small>{c.stars.length} sujets</small></button>)}
         </div>
@@ -62,11 +64,11 @@ function Fiche({ universe, selected, go, review }: { universe: UniverseView | nu
         <span class="path">{selected.g.name}</span>
         <h3>{selected.name}</h3>
         <p>{stars.length} sujets · {stars.reduce((a, s) => a + s.data.cards, 0)} cartes</p>
-        <div class="blk"><span class="k">Étoiles par maîtrise</span>
+        <div class="blk"><span class="k">{t.byLevel}</span>
           {stars.map((s) => (
             <button key={s.id} class="worm plain" onClick={() => go(s.id)}>
               <span class={`dot${s.level ? "" : " fog"}`} style={s.level ? { background: `hsl(${s.hue},80%,${45 + s.level * 8}%)` } : undefined} />
-              {s.name}<small>{s.level ? LEVELS[s.level] : "brouillard"}</small>
+              {s.name}<small>{s.level ? LEVELS[s.level] : t.fog}</small>
             </button>
           ))}
         </div>
@@ -150,6 +152,7 @@ function GalaxySettings({ g }: { g: GalaxyView }) {
 }
 
 function StarFiche({ id, planet, version, go, review }: { id: string; planet: string | null; version: number; go: (id: string) => void; review: () => void }) {
+  const { t } = useTerms();
   const [star, setStar] = useState<StarView | null>(null);
   const [err, setErr] = useState("");
   const body = useRef<HTMLDivElement>(null);
@@ -207,8 +210,8 @@ function StarFiche({ id, planet, version, go, review }: { id: string; planet: st
         </div>
       )}
       {!!star.link_refs?.length && (
-        <div style={{ display: "grid", gap: "6px" }}><span class="k">Trous de ver</span>
-          {star.link_refs.map((l) => <button key={l.id} class="worm" onClick={() => go(l.id)}><i />{l.name}<small>{l.galaxy} · traverser</small></button>)}
+        <div style={{ display: "grid", gap: "6px" }}><span class="k">{t.links}</span>
+          {star.link_refs.map((l) => <button key={l.id} class="worm" onClick={() => go(l.id)}><i />{l.name}<small>{l.galaxy} · {t.traverse}</small></button>)}
         </div>
       )}
       {!!star.evidence?.length && (
@@ -216,7 +219,7 @@ function StarFiche({ id, planet, version, go, review }: { id: string; planet: st
           <ul class="md">{star.evidence.map((e) => <li key={e}>{/^https?:\/\//.test(e) ? <a href={e} target="_blank" rel="noreferrer">{e}</a> : e}</li>)}</ul>
         </div>
       )}
-      {star.cards > 0 && <div class="row"><span class="k">{star.cards} cartes · {star.due} à revoir</span><button class="btn ghost" onClick={review}>Réviser cette étoile</button></div>}
+      {star.cards > 0 && <div class="row"><span class="k">{star.cards} cartes · {star.due} à revoir</span><button class="btn ghost" onClick={review}>{t.reviewOne}</button></div>}
       <p class="file">{star.file}</p>
     </>
   );
