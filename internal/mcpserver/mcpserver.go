@@ -15,6 +15,7 @@ import (
 
 const instructions = `Road to Knowledge is the user's map of what they know: galaxies (themes) > sub-themes > subjects (level 0-5, 0 = fog, never studied) > notions.
 Start with profile(), then subgraph() or search() to locate subjects, node() for a brief, fragments() only when you need the full fiche.
+To suggest what to learn next, call frontier(): it follows the user's discovery budget per theme and explains each suggestion.
 Never load everything. Writes: capture() drops a note in the inbox; propose() commits Markdown files on a proposals/<slug> branch that the user reviews.
 Subject files live at galaxies/<theme>/<sub-theme>/<subject>.md with YAML frontmatter (name, level, state, links, evidence, tags); "## heading" sections are notions; "question :: answer" lines are review cards.`
 
@@ -79,6 +80,19 @@ func New(svc *app.Service, version string) *mcp.Server {
 				return failure(err)
 			}
 			return text(hits)
+		})
+
+	type frontierIn struct {
+		Scope string `json:"scope,omitempty" jsonschema:"theme or sub-theme id; empty for the whole universe"`
+		Limit int    `json:"limit,omitempty" jsonschema:"max suggestions, default 9, at most 50"`
+	}
+	mcp.AddTool(s, &mcp.Tool{Name: "frontier", Description: "What to learn next around a scope, split by the theme's discovery budget into near, two_hops and off_piste, each with a reason in French."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in frontierIn) (*mcp.CallToolResult, any, error) {
+			f, err := svc.Frontier(in.Scope, in.Limit)
+			if err != nil {
+				return failure(err)
+			}
+			return text(f)
 		})
 
 	type captureIn struct {
