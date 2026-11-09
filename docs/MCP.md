@@ -73,6 +73,7 @@ number of themes, not with the size of fiches, except `fragments`.
 | `inbox` | read | ~30 tokens per note | `inbox()` |
 | `capture` | writes `inbox/` | ~10 tokens | `capture(text: "…", source: "claude-code")` |
 | `propose` | writes `proposals/<slug>` | ~15 tokens | `propose(slug: "fiche-keigo", message: "feat(japonais): keigo", files: [{path, content}])` |
+| `restructure` | writes `proposals/<slug>` | ~80 tokens (plan) | `restructure(kind: "split", id: "…/kana", parts: [{id: "katakana", notions: ["Katakana"]}], dry_run: true)`; also `kind: "move"` (`id`, `to`, `name`) and `kind: "merge"` (`sources`, `into`) |
 
 The server instructions tell the agent the order: `profile` first, then `search` or
 `subgraph`, then `node`, and `fragments` only when the brief is not enough.
@@ -99,7 +100,10 @@ you know, with no link between them, counts as two steps away ("proche de X par 
   branch behind. A proposal whose slug starts with `triage-` cannot raise a level either:
   the unattended routine never decides that you know something better.
 - A proposal can delete files only under `inbox/`, so a triage can clear the notes it
-  placed; it can never delete a subject.
+  placed; it can never delete a subject. Only `restructure` moves or removes subjects, and
+  the server computes those changes itself: a subject disappears only by being merged into
+  another, which keeps the highest level. Review history, links and old ids follow through
+  `review/renames.jsonl` (ADR-0014).
 - `capture` never overwrites: two notes in the same second get two files. The `source`
   field is reduced to one quoted line, so it cannot add frontmatter keys.
 - Every git call times out after 30 s; the whole process group is killed (hooks, signer) and

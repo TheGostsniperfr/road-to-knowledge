@@ -10,15 +10,17 @@ galaxies/<theme>/_galaxy.md
 galaxies/<theme>/<sub-theme>/_cluster.md
 galaxies/<theme>/<sub-theme>/<subject>.md
 review/log.jsonl
+review/renames.jsonl
 inbox/*.md
 assets/*
 layout.json
 library/*          git-ignored originals of books and long documents (ADR-0010)
 ```
 
-The folder names are the ids: `langues/japonais/kana`. Renaming a folder renames the id,
-so links and review history follow only if you update them too. `_galaxy.md` and
-`_cluster.md` are optional; without them the folder name is the display name.
+The folder names are the ids: `langues/japonais/kana`. Renaming a file or folder by hand
+renames the id and leaves links and review history behind; use "Réorganiser" in the fiche,
+`rtk mv`, `rtk split` or `rtk merge` instead, which keep both (see Rename log). `_galaxy.md`
+and `_cluster.md` are optional; without them the folder name is the display name.
 
 ## `_galaxy.md`
 
@@ -151,6 +153,27 @@ automatically around the pinned ones.
 A card id is the subject id plus a hash of the question, so editing the answer keeps the
 history and editing the question starts a new card. Ratings: 1 again, 2 hard, 3 good,
 4 easy. The schedule is rebuilt by replaying the log in time order (ADR-0006).
+
+## Rename log
+
+`review/renames.jsonl`, written by restructures (ADR-0014), append-only like the review log:
+
+```json
+{"from":"tech/k8s/helm","to":"tech/cloud/helm","at":"2026-11-09T10:34:15Z"}
+{"from":"langues/japonais/kana:1b4c4cc6","to":"langues/japonais/katakana:1b4c4cc6","at":"2026-11-09T10:34:06Z"}
+```
+
+A line without `:` renames a subject, sub-theme or theme; a card id follows its subject. A
+line with `:` moves one card, written when a split takes a notion to a new subject. A review
+follows every rename at or after its own time, in time order, so its history lands on the
+card's id of today. The same log redirects old ids in the API, the MCP tools and deep links.
+
+| Operation | Files | Rename lines |
+|---|---|---|
+| move or rename a subject | file moved, links in other subjects rewritten | the subject |
+| move or rename a sub-theme | every file moved | each subject and the sub-theme |
+| split | original rewritten without the notions, one new file per part (`links:` back to the original) | each card that left |
+| merge | target rewritten (highest level, union of links, evidence, tags, each source as a `##` section), sources deleted | each absorbed subject |
 
 ## Validation
 
