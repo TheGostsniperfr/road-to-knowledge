@@ -1,0 +1,34 @@
+# Roadmap
+
+Each item is an issue on the GitHub project board. `V1-xx` and `V2-xx` ids appear in the
+issue body.
+
+## V1: use it daily on real knowledge
+
+- [x] V1-00 AI-ready repo: AGENTS.md, PROGRESS, ADRs, devShell, SessionStart hook, CI
+- [x] V1-01 Knowledge format and `rtk validate`
+- [x] V1-02 Go server: load, FTS index, API, file watching, commits
+- [x] V1-03 MCP: profile, subgraph, node, fragments, search, capture, propose
+- [x] V1-04 WebGL map driven by the data
+- [x] V1-05 Panels: plan, search, to explore, inbox, fiche, AI preview
+- [x] V1-06 Review: inline cards, FSRS, scope per device
+- [x] V1-07 `seed` skill to bootstrap the real knowledge repo
+- [ ] V1-08 A week of daily use, then a feedback pass
+
+## V2
+
+- [ ] V2-01 Mobile: PWA, public HTTPS (Tailscale Funnel or Cloudflare Tunnel), OAuth 2.1, Claude mobile connector
+- [ ] V2-02 Semantic view from local embeddings (Ollama), `neighbors()` tool
+- [ ] V2-03 Anki: import `.apkg`, export with stable GUIDs, AnkiConnect
+- [ ] V2-04 Books: `book-ingest` skill, PDFs in MinIO, "à retenir" fiches
+- [ ] V2-05 Discovery: frontier suggestions with the per-theme budget, `frontier()` tool
+- [ ] V2-06 Morning brief: Miniflux collection, Claude routine triage, sources tab
+- [ ] V2-07 Evening inbox triage routine
+- [ ] V2-08 Granularity: split, merge and move subjects with history kept
+- [ ] V2-09 Pinned positions (`layout.json`) and editing discovery settings in the app
+- [ ] V2-10 Teach-back recap: an agent quizzes you on what you may have forgotten
+
+## Later
+
+Favourites and collections, git timelapse of the universe, roadmap or certification
+coverage, guided tours, shared constellations, exam mode, X API source.
