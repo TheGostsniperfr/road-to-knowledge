@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,6 +40,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/star/{id...}", s.patchStar)
 	mux.HandleFunc("GET /api/search", s.search)
 	mux.HandleFunc("GET /api/review/due", s.due)
+	mux.HandleFunc("GET /api/frontier", s.frontier)
 	mux.HandleFunc("POST /api/review", s.review)
 	mux.HandleFunc("POST /api/review/flush", s.flush)
 	mux.HandleFunc("POST /api/capture", s.capture)
@@ -160,6 +162,24 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, hits)
+}
+
+func (s *Server) frontier(w http.ResponseWriter, r *http.Request) {
+	limit := 0
+	if l := r.URL.Query().Get("limit"); l != "" {
+		n, err := strconv.Atoi(l)
+		if err != nil || n < 1 {
+			s.fail(w, fmt.Errorf("limit %q: %w", l, app.ErrInvalid))
+			return
+		}
+		limit = n
+	}
+	v, err := s.svc.Frontier(r.URL.Query().Get("scope"), limit)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, v)
 }
 
 func (s *Server) due(w http.ResponseWriter, r *http.Request) {

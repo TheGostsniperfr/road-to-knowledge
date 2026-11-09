@@ -125,6 +125,26 @@ func TestStar_Returns404_WhenUnknown(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, res.StatusCode)
 }
 
+func TestFrontier_SuggestsFogNextToKnownSubject(t *testing.T) {
+	ts, _ := server(t)
+
+	res := do(t, "GET", ts.URL+"/api/frontier?scope=lang/japonais", "")
+
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	var f app.FrontierView
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&f))
+	require.Len(t, f.Suggestions, 1)
+	assert.Equal(t, app.Suggestion{ID: "lang/japonais/keigo", Name: "Keigo", Galaxy: "Langues", Cluster: "japonais", State: "explore", Bucket: app.BucketNear, Reason: "dans japonais, à côté de Kana que tu maîtrises"}, f.Suggestions[0])
+}
+
+func TestFrontier_Returns400_WhenLimitIsNotANumber(t *testing.T) {
+	ts, _ := server(t)
+
+	res := do(t, "GET", ts.URL+"/api/frontier?limit=lots", "")
+
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+}
+
 func TestReview_RemovesCardFromDueList(t *testing.T) {
 	ts, _ := server(t)
 	var before []app.DueCard
