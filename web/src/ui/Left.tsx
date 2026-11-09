@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api, type Bucket, type FrontierView, type Hit, type InboxItem, type UniverseView } from "../api";
 import type { SkyNode } from "../sky/engine";
+import { News } from "./News";
 import { useTerms } from "./terms";
 
-type Tab = "plan" | "todo" | "inbox";
+type Tab = "plan" | "todo" | "news" | "inbox";
 
 const dot = (s: { level: number; stale?: boolean }, hue: number) =>
   s.level === 0 ? <span class="dot fog" /> : <span class={`dot${s.stale ? " stale" : ""}`} style={{ background: `hsl(${hue},80%,${45 + s.level * 8}%)` }} />;
@@ -47,6 +48,7 @@ export function Left({ universe, selected, go }: { universe: UniverseView | null
       <div class="tabs" role="tablist">
         <button role="tab" aria-selected={tab === "plan"} onClick={() => setTab("plan")}>Plan</button>
         <button role="tab" aria-selected={tab === "todo"} onClick={() => setTab("todo")}>À explorer</button>
+        <button role="tab" aria-selected={tab === "news"} onClick={() => setTab("news")}>Veille</button>
         <button role="tab" aria-selected={tab === "inbox"} onClick={() => setTab("inbox")}>
           Boîte {universe?.inbox ? <span class="n">{universe.inbox}</span> : null}
         </button>
@@ -59,6 +61,7 @@ export function Left({ universe, selected, go }: { universe: UniverseView | null
       <div class="lbody">
         {tab === "plan" && (query.trim().length >= 2 ? <Hits hits={hits} go={go} /> : <Tree universe={universe} selId={selId} open={openPath} go={go} />)}
         {tab === "todo" && <Todo universe={universe} selected={selected} go={go} />}
+        {tab === "news" && <News universe={universe} go={go} />}
         {tab === "inbox" && <Inbox version={universe?.version ?? 0} />}
       </div>
     </aside>

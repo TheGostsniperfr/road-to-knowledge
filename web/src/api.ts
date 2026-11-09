@@ -96,3 +96,19 @@ export const api = {
   frontier: (scope: string, limit = 12) => req<FrontierView>("GET", `/api/frontier?scope=${encodeURIComponent(scope)}&limit=${limit}`),
   ai: (tool: "profile" | "subgraph" | "node", id = "") => req<AIPreview>("GET", `/api/ai?tool=${tool}&id=${encodeURIComponent(id)}`),
 };
+
+export interface NewsMatch { id: string; name: string; level: number }
+
+export interface NewsItem { id: string; title: string; link: string; summary?: string; source: string; scope: string; scope_name: string; galaxy: string; published: string; subjects: NewsMatch[] }
+
+export interface NewsSource { url: string; name: string; scope: string; scope_name: string; last_ok?: string; error?: string }
+
+export interface NewsView { items: NewsItem[]; sources: NewsSource[]; hidden: number }
+
+export interface NewsReport { fetched: number; not_modified: number; skipped: number; failed: number; new_items: number; errors?: string[] }
+
+export const newsApi = {
+  list: (opts: { scope?: string; since?: string; all?: boolean; limit?: number }) =>
+    req<NewsView>("GET", `/api/news?scope=${encodeURIComponent(opts.scope ?? "")}&since=${encodeURIComponent(opts.since ?? "7d")}&limit=${opts.limit ?? 60}${opts.all ? "&all=1" : ""}`),
+  fetch: () => req<NewsReport>("POST", "/api/news/fetch"),
+};
