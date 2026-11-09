@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -25,8 +26,11 @@ var version = "dev"
 
 const usage = `rtk: Road to Knowledge
 
-  rtk serve    [--data DIR] [--addr 127.0.0.1:7878]   web app + API + MCP over HTTP at /mcp
+  rtk serve    [--data DIR] [--addr 127.0.0.1:7878] [--news-every 6h]
+                                                      web app + API + MCP over HTTP at /mcp
   rtk mcp      [--data DIR]                           MCP over stdio, for Claude Code
+  rtk news     fetch|list [--data DIR] [--scope ID] [--since 7d] [--all]
+                                                      fetch or read the feeds of your themes
   rtk validate [--data DIR]                           check every file, exit 1 on problems
   rtk init     DIR                                    create an empty knowledge folder
   rtk book add [--data DIR] [--title T] FILE          put a PDF in the git-ignored library, print its source block
@@ -49,6 +53,8 @@ func main() {
 		err = serve(ctx, log, os.Args[2:])
 	case "mcp":
 		err = stdio(ctx, log, os.Args[2:])
+	case "news":
+		err = newsCmd(ctx, log, os.Args[2:])
 	case "validate":
 		err = validate(os.Args[2:])
 	case "init":
@@ -82,11 +88,13 @@ func serve(ctx context.Context, log *slog.Logger, args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	data := dataFlag(fs)
 	addr := fs.String("addr", "127.0.0.1:7878", "listen address, keep it on localhost")
+	newsEvery := fs.Duration("news-every", 6*time.Hour, "fetch the theme feeds this often, 0 to disable")
 	fs.Parse(args)
 	svc, err := open(ctx, log, *data)
 	if err != nil {
 		return err
 	}
+	go svc.RunNews(ctx, *newsEvery)
 	go func() {
 		if err := svc.Watch(ctx); err != nil {
 			log.Error("watch stopped", "err", err)
