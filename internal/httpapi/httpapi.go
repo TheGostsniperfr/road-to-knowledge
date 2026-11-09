@@ -51,6 +51,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/events", s.events)
 	assets := filepath.Join(s.svc.Root(), "assets")
 	mux.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(os.DirFS(assets))))
+	library := filepath.Join(s.svc.Root(), "library")
+	mux.Handle("GET /library/", http.StripPrefix("/library/", http.FileServerFS(os.DirFS(library))))
 	if s.mcp != nil {
 		mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s.mcp }, nil))
 	}
