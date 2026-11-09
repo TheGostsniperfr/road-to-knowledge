@@ -8,11 +8,32 @@ what changed, what is open, where the next session starts.
 1. `make init`, then `make check`: fix anything red before new work.
 2. Backlog: the GitHub project board "Road to Knowledge" (`scripts/session-context.sh`
    prints the open items). Roadmap and ids: [`ROADMAP.md`](ROADMAP.md).
-3. Next action: V1-08. Brian uses V1 on his real knowledge repo
-   (`TheGostsniperfr/knowledge`) for a week; collect feedback in issues, then pick V2-01
-   or V2-02 with him.
+3. Next action: V1-08. Brian uses the app on his real knowledge repo
+   (`TheGostsniperfr/knowledge`) for a week, with the MCP server connected (`docs/MCP.md`);
+   collect feedback in issues. Then V2-02 (semantic, Ollama), V2-08 (granularity) or V2-01
+   (mobile) with him.
 
 ## Log
+
+### 2026-11-09 · V2 wave 2: Anki, books, news, AI-ready
+
+- V2-12 (#29): every MCP tool exercised from a real client over stdio and HTTP
+  (`cmd/rtk/mcp_e2e_test.go`), and with `claude -p`. Fixed capture collisions and
+  frontmatter injection; `propose` now validates like the app loads, refuses level drops,
+  refuses raises from `triage-*` slugs, may delete `inbox/` notes only; git calls time out
+  and kill hung hooks. New tools `due`, `at_risk`, `recent`, `inbox`. Setup in `docs/MCP.md`.
+- V2-07 / V2-10: skills `inbox-triage` (evening routine) and `teach-back`.
+- V2-04 (#26): `book-ingest` skill, `rtk book add`, git-ignored `library/` (ADR-0010),
+  `source:` with page links in the fiche, `/library/` and `/assets/` served through `os.Root`
+  with `CSP: sandbox`. Skills propose through a worktree, never `git switch` the live checkout.
+- V2-03 (#27): `rtk anki export|import|push`, export button, stable GUIDs, no review
+  history exchanged (ADR-0011). Imports with media go to `proposals/anki-import`.
+- V2-06 (#28): `sources:` feeds per theme, built-in RSS/Atom reader with cache in
+  `.rtk/news` (ADR-0012), "Veille" tab, MCP `news`, `morning-brief` skill.
+- Every PR had an independent review; all MAJOR findings fixed before merge.
+- Open: Brian's knowledge repo has no `sources:` yet; `rtk anki push` untested against a real
+  Anki desktop; book-ingest not yet run on a 300-page book; `at_risk` uses rules, not FSRS
+  retrievability.
 
 ### 2026-11-09 · V2-11 atlas view
 
