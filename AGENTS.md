@@ -50,4 +50,4 @@ Ids `V1-xx` and `V2-xx` come from `docs/ROADMAP.md` and appear in issue bodies.
 
 `cmd/rtk` CLI · `internal/*` Go packages (see ARCHITECTURE) · `web/` front end, built
 into `web/dist` and embedded in the binary · `examples/knowledge` sample data ·
-`skills/seed` bootstrap skill (also linked in `.claude/skills`).
+`skills/` agent skills: `seed`, `inbox-triage`, `teach-back` (linked in `.claude/skills`; see `docs/MCP.md`).
