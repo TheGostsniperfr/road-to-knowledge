@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/TheGostsniperfr/road-to-knowledge/internal/app"
 	"github.com/TheGostsniperfr/road-to-knowledge/internal/httpapi"
+	"github.com/TheGostsniperfr/road-to-knowledge/internal/kb"
 )
 
 func lastCommit(t *testing.T, root string) string {
@@ -42,12 +44,12 @@ func TestPutLayout_PinsGalaxiesAndCommits(t *testing.T) {
 	assert.Equal(t, "chore(layout): pin galaxies", lastCommit(t, root))
 }
 
-func TestPutLayout_Returns404_WhenGalaxyIsUnknown(t *testing.T) {
+func TestPutLayout_Returns400_WhenBodyNamesUnknownGalaxy(t *testing.T) {
 	ts, root := server(t)
 
 	res := do(t, "PUT", ts.URL+"/api/layout", `{"galaxies":{"cooking":{"x":0,"y":0}}}`)
 
-	assert.Equal(t, http.StatusNotFound, res.StatusCode)
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
 	assert.NoFileExists(t, filepath.Join(root, "layout.json"))
 }
 
@@ -73,6 +75,41 @@ func TestPatchGalaxy_Returns400_WhenDiscoveryDoesNotSumToHundred(t *testing.T) {
 	res := do(t, "PATCH", ts.URL+"/api/galaxy/lang", `{"discovery":{"near":70,"two_hops":20,"off_piste":20,"news":false}}`)
 
 	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+}
+
+func TestPatchGalaxy_LeavesValidFile_WhenSavesRace(t *testing.T) {
+	ts, root := server(t)
+	bodies := []string{
+		`{"review_after_days":10,"discovery":{"near":50,"two_hops":30,"off_piste":20,"news":true}}`,
+		`{"review_after_days":20,"discovery":{"near":80,"two_hops":10,"off_piste":10,"news":false}}`,
+	}
+	var wg sync.WaitGroup
+	codes := make([]int, 8)
+
+	for i := range codes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req, _ := http.NewRequest("PATCH", ts.URL+"/api/galaxy/lang", strings.NewReader(bodies[i%2]))
+			req.Header.Set("Content-Type", "application/json")
+			if res, err := http.DefaultClient.Do(req); err == nil {
+				codes[i] = res.StatusCode
+				res.Body.Close()
+			}
+		}()
+	}
+	wg.Wait()
+
+	for _, c := range codes {
+		assert.Equal(t, http.StatusOK, c)
+	}
+	u, problems, err := kb.Load(root)
+	require.NoError(t, err)
+	assert.Empty(t, problems)
+	assert.Equal(t, "Langues", u.Galaxy("lang").Name, "the other keys survive every save")
+	assert.Contains(t, []int{10, 20}, u.Galaxy("lang").ReviewAfter)
+	leftovers, _ := filepath.Glob(filepath.Join(root, "galaxies/lang/.*.tmp"))
+	assert.Empty(t, leftovers)
 }
 
 func TestPatchGalaxy_CreatesGalaxyFile_WhenItIsMissing(t *testing.T) {

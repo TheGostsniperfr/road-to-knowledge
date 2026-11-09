@@ -33,6 +33,9 @@ type Service struct {
 	git  *gitx.Repo
 	book *review.Book
 
+	// writeMu serializes read-modify-write of knowledge files with their commit and reload.
+	writeMu sync.Mutex
+
 	mu       sync.RWMutex
 	u        *kb.Universe
 	problems []kb.Problem
@@ -189,6 +192,8 @@ func (s *Service) commit(ctx context.Context, msg string, paths ...string) {
 
 // SetMeta changes the level or state of a subject. It never lowers a level on its own: only an explicit call does.
 func (s *Service) SetMeta(ctx context.Context, id string, level *int, state *kb.State) (StarView, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	u, _, _, _ := s.snapshot()
 	st := u.Star(id)
 	if st == nil {
@@ -261,10 +266,12 @@ func (s *Service) Propose(ctx context.Context, slug, message string, files []git
 
 // SetLayout replaces the pinned galaxy positions. Pins for galaxies that no longer exist are refused, not kept.
 func (s *Service) SetLayout(ctx context.Context, pins map[string]kb.Pin) (UniverseView, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	u, _, _, _ := s.snapshot()
 	for id, p := range pins {
 		if u.Galaxy(id) == nil {
-			return UniverseView{}, fmt.Errorf("galaxy %q: %w", id, ErrNotFound)
+			return UniverseView{}, fmt.Errorf("pin for unknown galaxy %q: %w", id, ErrInvalid)
 		}
 		if !p.Valid() {
 			return UniverseView{}, fmt.Errorf("pin for %q out of range: %w", id, ErrInvalid)
@@ -288,6 +295,8 @@ type GalaxySettings struct {
 }
 
 func (s *Service) SetGalaxy(ctx context.Context, id string, in GalaxySettings) (GalaxyView, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	u, _, _, _ := s.snapshot()
 	g := u.Galaxy(id)
 	if g == nil {
