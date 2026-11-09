@@ -27,8 +27,12 @@ what changed, what is open, where the next session starts.
   the rename log; `propose` from an agent still cannot. `Commit` stages deletions.
 - UI: "Réorganiser" in the subject fiche (Déplacer, Renommer, Scinder, Fusionner avec…)
   shows the plan before applying, in both themes.
-- Open: an apply that fails halfway (disk error) leaves the files moved so far uncommitted;
-  galaxy (theme) renames are not supported; a sub-theme can only move into an existing theme.
+- Safety: an apply is all or nothing (undo in reverse, rename log last, index reset on a failed
+  commit); the app applies only the plan it showed (hash, 409 otherwise); a live id is never
+  redirected; an existing proposal branch is never overwritten; an emptied sub-theme keeps a
+  `_cluster.md`; deep links to moved notions are rewritten.
+- Open: galaxy (theme) renames are not supported; a sub-theme can only move into an existing
+  theme; the UI splits one part at a time (the CLI takes several).
 
 ### 2026-11-09 · V2-02 search by meaning
 
