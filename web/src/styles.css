@@ -179,7 +179,7 @@ canvas.sky.drag { cursor: grabbing; }
 .md th, .md td { border: 1px solid var(--rule-2); padding: 4px 6px; text-align: left; }
 .md blockquote { border-left: 2px solid var(--accent); padding-left: 10px; color: var(--ink); }
 .md ul, .md ol { padding-left: 18px; display: grid; gap: 3px; }
-.md .qa { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: baseline; border: 1px dashed var(--line-2); border-radius: 6px; padding: 5px 9px; }
+.md .qa { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 10px; align-items: baseline; border: 1px dashed var(--line-2); border-radius: 6px; padding: 5px 9px; }
 .md .qa b { color: var(--ink-strong); font-weight: 600; }
 .md .qa span { color: var(--accent); }
 .md .mermaid { background: var(--raised); border-radius: 8px; padding: 8px; }
@@ -306,3 +306,5 @@ canvas.atlas.drag { cursor: grabbing; }
 .legend span:first-child { margin-right: 2px; }
 .legend i.fog { border: 1px dashed var(--faint); margin-left: 8px; }
 .legend i.stale { width: 7px; height: 7px; background: var(--stale); margin-left: 8px; }
+.srcl { font-size: .82rem; color: var(--ink); }
+a.srcl { color: var(--teal); }

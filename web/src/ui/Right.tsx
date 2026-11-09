@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { api, type AIPreview, type Discovery, type GalaxyView, type State, type StarView, type UniverseView } from "../api";
+import { api, type AIPreview, type Discovery, type GalaxyView, type Source, type State, type StarView, type UniverseView } from "../api";
 import { renderMarkdown, renderMermaid, section } from "../markdown";
 import type { SkyNode } from "../sky/engine";
 import { buildLayout, currentPins } from "../sky/layout";
 import { SHARES, STEP, rebalance } from "./discovery";
+import { pageOf, sourceHref, sourceLabel } from "./source";
 import { useTerms } from "./terms";
 
 const LEVELS = ["Brouillard", "Entendu parler", "Compris", "Pratiqué en lab", "Maîtrisé en prod", "Je peux l'enseigner"];
@@ -182,6 +183,7 @@ function StarFiche({ id, planet, version, go, review }: { id: string; planet: st
         <span class="path">{[...star.path, star.name].join(" › ")}</span>
         <h3>{planet}</h3>
         <div class="md" ref={body} dangerouslySetInnerHTML={{ __html: renderMarkdown(md || "_Notion à écrire._") }} />
+        {star.source && <SourceLine src={star.source} planet={planet} />}
         <button class="btn ghost" onClick={() => go(star.id)}>← {star.name}</button>
       </>
     );
@@ -219,9 +221,21 @@ function StarFiche({ id, planet, version, go, review }: { id: string; planet: st
           <ul class="md">{star.evidence.map((e) => <li key={e}>{/^https?:\/\//.test(e) ? <a href={e} target="_blank" rel="noreferrer">{e}</a> : e}</li>)}</ul>
         </div>
       )}
+      {star.source && <SourceLine src={star.source} planet={planet} />}
       {star.cards > 0 && <div class="row"><span class="k">{star.cards} cartes · {star.due} à revoir</span><button class="btn ghost" onClick={review}>{t.reviewOne}</button></div>}
       <p class="file">{star.file}</p>
     </>
+  );
+}
+
+function SourceLine({ src, planet }: { src: Source; planet: string | null }) {
+  const page = pageOf(planet);
+  const href = sourceHref(src, page);
+  return (
+    <div class="row"><span class="k">Source</span>
+      {href ? <a class="srcl" href={href} target="_blank" rel="noreferrer">{sourceLabel(src, page)}</a> : <span class="srcl">{sourceLabel(src, page)}</span>}
+      {src.file && !src.available && <small class="file">fichier absent de cette machine ({src.file})</small>}
+    </div>
   );
 }
 

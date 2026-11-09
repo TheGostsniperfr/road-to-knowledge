@@ -46,7 +46,10 @@ export interface StarView extends StarSummary {
   tags?: string[];
   link_refs?: LinkRef[];
   file: string;
+  source?: Source;
 }
+
+export interface Source { title: string; author?: string; year?: number; pages?: number; file?: string; url?: string; available: boolean }
 
 export interface Hit { id: string; name: string; snippet: string }
 

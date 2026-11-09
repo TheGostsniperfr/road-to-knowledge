@@ -10,6 +10,6 @@ const api = {
 
 export default defineConfig({
   plugins: [preact()],
-  server: { port: 5173, proxy: { "/api": api, "/assets": api } },
+  server: { port: 5173, proxy: { "/api": api, "/assets": api, "/library": api } },
   build: { outDir: "dist", assetsDir: "app", emptyOutDir: true, chunkSizeWarningLimit: 1600 },
 });
