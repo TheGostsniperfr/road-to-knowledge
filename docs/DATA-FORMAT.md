@@ -31,15 +31,15 @@ discovery: { near: 70, two_hops: 20, off_piste: 10, news: false }
 ```
 
 `discovery` shares the suggestions of "À explorer" and `frontier()` between three
-buckets, in percent. Candidates are subjects in state `idea` or `explore`; a subject is
+buckets, in percent. Candidates are subjects in state `idea` or `explore` below level 3; a subject is
 known at level 3 or more, or when marked `acquired`.
 
 - `near`: in a sub-theme where you know something, or linked to a subject you know.
 - `two_hops`: two links away from a subject you know.
-- `off_piste`: no known neighbour, least covered sub-themes first. Taken one level above
+- `off_piste`: no known neighbour, least covered sub-themes first. Taken from the scope and one level above
   the scope, so a sub-theme points to its siblings and a galaxy to other galaxies.
 
-A bucket without enough candidates gives its slots to the others. `news` is reserved for
+Percentages cannot be negative. A bucket without enough candidates gives its slots to the others. `news` is reserved for
 V2-06.
 
 ## Subject file
