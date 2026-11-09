@@ -20,10 +20,12 @@ type galaxyMeta struct {
 	Shape       string     `yaml:"shape"`
 	ReviewAfter int        `yaml:"review_after_days"`
 	Discovery   *Discovery `yaml:"discovery"`
+	Sources     []Source   `yaml:"sources"`
 }
 
 type clusterMeta struct {
-	Name string `yaml:"name"`
+	Name    string   `yaml:"name"`
+	Sources []Source `yaml:"sources"`
 }
 
 type starMeta struct {
@@ -80,6 +82,7 @@ func Load(root string) (*Universe, []Problem, error) {
 					report(g.Path, "discovery shares must be positive and sum to 100, got %d + %d + %d", gm.Discovery.Near, gm.Discovery.TwoHops, gm.Discovery.OffPiste)
 				}
 			}
+			g.Sources = validSources(g.Path, gm.Sources, report)
 		}
 		u.galaxies[gid] = g
 		u.Galaxies = append(u.Galaxies, g)
@@ -102,6 +105,7 @@ func Load(root string) (*Universe, []Problem, error) {
 				if cm.Name != "" {
 					c.Name = cm.Name
 				}
+				c.Sources = validSources(c.Path, cm.Sources, report)
 			}
 			u.clusters[cid] = c
 			g.Clusters = append(g.Clusters, c)
