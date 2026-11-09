@@ -13,6 +13,7 @@ review/log.jsonl
 inbox/*.md
 assets/*
 layout.json
+library/*          git-ignored originals of books and long documents (ADR-0010)
 ```
 
 The folder names are the ids: `langues/japonais/kana`. Renaming a folder renames the id,
@@ -68,6 +69,29 @@ First paragraph: the summary shown in lists and given to agents.
 
 Images: `![](assets/kana.png)` from any fiche; the server exposes `assets/` read-only.
 Diagrams: fenced `mermaid` blocks are rendered in the fiche.
+
+## `source:` (books and long documents)
+
+A subject written from a book or a long document says where it comes from. The
+`book-ingest` skill fills it from `rtk book add FILE`, which copies the file into the
+git-ignored `library/` and prints this block (ADR-0010).
+
+```yaml
+source:
+  title: Le journal avant tout     # required
+  author: Road to Knowledge
+  year: 2026
+  pages: 7
+  file: library/journal-6e5505f8.pdf   # optional, must be inside library/
+  sha256: 6e5505f8…                    # 64 hex chars, finds the file again on another machine
+  url: https://…                       # optional, for online documents
+```
+
+The fiche shows the source and links to the file when it is on this machine; the server
+serves `library/` read-only at `/library/`. A notion heading that ends with `(p. N)`
+opens the PDF at that page. Book notions are written `## À retenir : <idée> (p. N)`.
+An invalid source (no title, a path outside `library/`, a bad hash) is a validation
+problem and is ignored; the subject still loads.
 
 ## `layout.json`
 
