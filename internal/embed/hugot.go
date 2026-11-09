@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/knights-analytics/hugot"
 	"github.com/knights-analytics/hugot/pipelines"
@@ -12,12 +14,17 @@ import (
 // maxChars keeps inputs well inside the models' token window; longer notions are cut, not split.
 const maxChars = 1500
 
-const batchSize = 8
+// batchSize is one text: the backend pads every batch to its longest text and to a fixed bucket,
+// so single texts index faster here, and a search waits for one text at most, not a batch.
+const batchSize = 1
 
 // Hugot runs a model with hugot's pure Go backend: no cgo, no Python, no separate server.
 type Hugot struct {
-	spec     Spec
-	mu       sync.Mutex
+	spec Spec
+	mu   sync.Mutex
+	// queries counts searches waiting for the model: indexing yields to them between batches,
+	// so a search waits for at most one batch, not for the whole index.
+	queries  atomic.Int32
 	session  *hugot.Session
 	pipeline *pipelines.FeatureExtractionPipeline
 }
@@ -54,6 +61,8 @@ func (h *Hugot) Model() string { return h.spec.ID }
 func (h *Hugot) Dims() int     { return h.spec.Dims }
 func (h *Hugot) Spec() Spec    { return h.spec }
 
+func (h *Hugot) Fingerprint() string { return h.spec.Fingerprint() }
+
 func (h *Hugot) Close() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -78,7 +87,21 @@ func (h *Hugot) Embed(ctx context.Context, texts []string, kind Kind) ([][]float
 			}
 			in[i] = prefix + t
 		}
+		if kind == Query {
+			h.queries.Add(1)
+		} else {
+			for h.queries.Load() > 0 {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(5 * time.Millisecond):
+				}
+			}
+		}
 		h.mu.Lock()
+		if kind == Query {
+			h.queries.Add(-1)
+		}
 		res, err := h.pipeline.RunPipeline(ctx, in)
 		h.mu.Unlock()
 		if err != nil {
