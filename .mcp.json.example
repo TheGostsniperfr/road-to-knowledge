@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "knowledge": {
+      "command": "rtk",
+      "args": ["mcp", "--data", "/home/you/knowledge"]
+    }
+  }
+}
