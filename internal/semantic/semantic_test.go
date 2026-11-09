@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -119,4 +120,65 @@ func TestBuild_KeepsThePreviousVectorsWhenCancelled(t *testing.T) {
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.True(t, ix.Ready())
 	assert.Equal(t, semantic.StateReady, ix.Status().State)
+}
+
+// gated blocks any batch containing "slow" until release is closed, to interleave two builds.
+type gated struct {
+	embed.Fake
+	started chan struct{}
+	release chan struct{}
+}
+
+func (g *gated) Embed(ctx context.Context, texts []string, kind embed.Kind) ([][]float32, error) {
+	for _, t := range texts {
+		if strings.Contains(t, "slow") {
+			close(g.started)
+			<-g.release
+		}
+	}
+	return g.Fake.Embed(ctx, texts, kind)
+}
+
+func TestBuild_DropsAnOlderBuildThatFinishesAfterANewerOne(t *testing.T) {
+	g := &gated{started: make(chan struct{}), release: make(chan struct{})}
+	dir := t.TempDir()
+	ix := semantic.New(g, semantic.Thresholds{}, dir)
+	old := []semantic.Chunk{{ID: "a", Subject: "a", Text: "slow old text", Hash: "h-old"}}
+	fresh := []semantic.Chunk{{ID: "b", Subject: "b", Text: "fresh text", Hash: "h-new"}}
+	errs := make(chan error, 1)
+	go func() { _, err := ix.Build(context.Background(), old); errs <- err }()
+	<-g.started
+
+	_, err := ix.Build(context.Background(), fresh)
+	require.NoError(t, err)
+	close(g.release)
+
+	assert.ErrorIs(t, <-errs, semantic.ErrOutdated)
+	assert.Equal(t, []string{"b"}, subjectsOf(ix))
+	embedded, err := semantic.New(&embed.Fake{}, semantic.Thresholds{}, dir).Build(context.Background(), fresh)
+	require.NoError(t, err)
+	assert.Zero(t, embedded, "the cache holds the newer build's vectors")
+}
+
+func subjectsOf(ix *semantic.Index) []string {
+	var out []string
+	for id := range ix.SubjectVectors() {
+		out = append(out, id)
+	}
+	return out
+}
+
+func TestBuild_ReembedsEverything_WhenTheCacheFileIsUnreadable(t *testing.T) {
+	_, u := universe(t)
+	dir := t.TempDir()
+	_, err := semantic.New(&embed.Fake{}, semantic.Thresholds{}, dir).Build(context.Background(), semantic.Chunks(u))
+	require.NoError(t, err)
+	files, _ := filepath.Glob(filepath.Join(dir, "*.bin"))
+	require.Len(t, files, 1)
+	require.NoError(t, os.WriteFile(files[0], []byte("not a gob"), 0o644))
+
+	embedded, err := semantic.New(&embed.Fake{}, semantic.Thresholds{}, dir).Build(context.Background(), semantic.Chunks(u))
+
+	require.NoError(t, err)
+	assert.Equal(t, len(semantic.Chunks(u)), embedded)
 }
