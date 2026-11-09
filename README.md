@@ -18,6 +18,9 @@ MCP, without loading everything.
   diagrams. `## Heading` sections become planets.
 - **Review**: write `question :: answer` anywhere in a fiche. Cards are scheduled with
   FSRS from an append-only log, scoped to wherever you are zoomed.
+- **Anki**: `rtk anki export` writes an `.apkg` (also a button on every theme), `rtk anki push`
+  updates a running Anki through AnkiConnect, `rtk anki import` turns any deck into cards in
+  `inbox/`. Re-exports update the same notes in Anki instead of duplicating them (ADR-0010).
 - **Never forgets for you**: a level never drops on its own. A subject not reviewed for
   longer than its theme allows only gets an amber dot.
 - **Veille**: list RSS or Atom feeds in a theme (`sources:`). The "Veille" tab shows the
