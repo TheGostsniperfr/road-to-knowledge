@@ -53,6 +53,12 @@ export interface AIPreview { call: string; payload: string; tokens: number; full
 
 export interface InboxItem { name: string; text: string; captured: string }
 
+export type Bucket = "near" | "two_hops" | "off_piste";
+
+export interface Suggestion { id: string; name: string; galaxy: string; cluster: string; level: number; state: State; bucket: Bucket; reason: string }
+
+export interface FrontierView { scope: string; budget: Discovery; suggestions: Suggestion[] }
+
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
@@ -79,5 +85,6 @@ export const api = {
   flush: (count: number) => req<void>("POST", "/api/review/flush", { count }),
   capture: (text: string) => req<{ saved: string }>("POST", "/api/capture", { text }),
   inbox: () => req<InboxItem[]>("GET", "/api/inbox"),
+  frontier: (scope: string, limit = 12) => req<FrontierView>("GET", `/api/frontier?scope=${encodeURIComponent(scope)}&limit=${limit}`),
   ai: (tool: "profile" | "subgraph" | "node", id = "") => req<AIPreview>("GET", `/api/ai?tool=${tool}&id=${encodeURIComponent(id)}`),
 };
