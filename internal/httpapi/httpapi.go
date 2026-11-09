@@ -43,6 +43,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/search", s.search)
 	mux.HandleFunc("GET /api/review/due", s.due)
 	mux.HandleFunc("GET /api/frontier", s.frontier)
+	mux.HandleFunc("GET /api/news", s.newsList)
+	mux.HandleFunc("POST /api/news/fetch", s.newsFetch)
 	mux.HandleFunc("POST /api/review", s.review)
 	mux.HandleFunc("POST /api/review/flush", s.flush)
 	mux.HandleFunc("POST /api/capture", s.capture)
