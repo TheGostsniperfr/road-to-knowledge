@@ -14,6 +14,16 @@ what changed, what is open, where the next session starts.
 
 ## Log
 
+### 2026-11-09 · V2-11 atlas view
+
+- `web/src/atlas`: circle packing of themes, sub-themes and subjects (ADR-0009), Canvas2D,
+  van Wijk zoom, labels that adapt to the zoom, links bent toward their common theme and
+  highlighted around the focused subject, legend for levels.
+- Switch "Galaxie / Atlas" in the HUD, light and dark atlas themes; both stored per device.
+- Panels speak plain words in the atlas (sujets, thèmes, liens) through `ui/terms.ts`.
+- Colours of the panels are now tokens in `styles.css`, so a theme only redefines variables.
+- Open: offscreen link targets are not labelled at the edge of the view.
+
 ### 2026-11-09 · V2-09 pinned positions and galaxy settings
 
 - `layout.json` (ADR-0008): optional pins per galaxy, loaded and validated by `kb`, written

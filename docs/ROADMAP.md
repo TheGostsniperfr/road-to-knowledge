@@ -27,6 +27,7 @@ issue body.
 - [ ] V2-08 Granularity: split, merge and move subjects with history kept
 - [x] V2-09 Pinned positions (`layout.json`) and editing discovery settings in the app
 - [ ] V2-10 Teach-back recap: an agent quizzes you on what you may have forgotten
+- [x] V2-11 Atlas: a second, professional map view (circle packing, light and dark)
 
 ## Later
 
