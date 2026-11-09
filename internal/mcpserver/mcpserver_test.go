@@ -98,6 +98,23 @@ func TestNode_ReturnsToolError_WhenUnknown(t *testing.T) {
 	assert.True(t, isErr)
 }
 
+func TestFrontier_ExplainsEachSuggestion(t *testing.T) {
+	cs, _ := session(t)
+
+	out, isErr := call(t, cs, "frontier", map[string]any{})
+
+	assert.False(t, isErr)
+	assert.Contains(t, out, `"reason":"k8s (tech), exploré à 0 %"`)
+}
+
+func TestFrontier_ReturnsToolError_WhenScopeIsUnknown(t *testing.T) {
+	cs, _ := session(t)
+
+	_, isErr := call(t, cs, "frontier", map[string]any{"scope": "nope"})
+
+	assert.True(t, isErr)
+}
+
 func TestPropose_LandsOnProposalBranchOnly(t *testing.T) {
 	cs, root := session(t)
 
