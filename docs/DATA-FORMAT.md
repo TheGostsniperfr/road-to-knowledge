@@ -12,6 +12,7 @@ galaxies/<theme>/<sub-theme>/<subject>.md
 review/log.jsonl
 inbox/*.md
 assets/*
+layout.json
 ```
 
 The folder names are the ids: `langues/japonais/kana`. Renaming a folder renames the id,
@@ -26,7 +27,7 @@ name: Langues
 hue: 168                 # 0-360, the galaxy's colour; derived from the id when absent
 shape: spiral            # spiral | barred | ring | elliptical | lenticular | irregular
 review_after_days: 21    # after this, an unreviewed subject gets the amber dot
-discovery: { near: 70, two_hops: 20, off_piste: 10, news: false }
+discovery: { near: 70, two_hops: 20, off_piste: 10, news: false }   # shares sum to 100
 ---
 ```
 
@@ -39,8 +40,10 @@ known at level 3 or more, or when marked `acquired`.
 - `off_piste`: no known neighbour, least covered sub-themes first. Taken from the scope and one level above
   the scope, so a sub-theme points to its siblings and a galaxy to other galaxies.
 
-Percentages cannot be negative. A bucket without enough candidates gives its slots to the others. `news` is reserved for
+Percentages cannot be negative and must sum to 100. A bucket without enough candidates gives its slots to the others. `news` is reserved for
 V2-06.
+
+The galaxy fiche in the app edits `review_after_days` and `discovery` and commits the file.
 
 ## Subject file
 
@@ -65,6 +68,24 @@ First paragraph: the summary shown in lists and given to agents.
 
 Images: `![](assets/kana.png)` from any fiche; the server exposes `assets/` read-only.
 Diagrams: fenced `mermaid` blocks are rendered in the fiche.
+
+## `layout.json`
+
+Optional. Pins galaxy positions so adding a theme never moves the others (ADR-0008).
+The app writes it when you press "Figer la carte"; you can also edit it by hand.
+
+```json
+{
+  "galaxies": {
+    "tech": { "x": -1699, "y": -42 },
+    "langues": { "x": 1337, "y": 2145, "rotation": 1.2 }
+  }
+}
+```
+
+Coordinates are map units, within ±1,000,000. `rotation` (radians) turns the galaxy in its
+plane; without it the angle comes from the id. A galaxy missing from the file is placed
+automatically around the pinned ones.
 
 ## Review log
 

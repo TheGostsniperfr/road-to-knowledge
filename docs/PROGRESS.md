@@ -14,6 +14,17 @@ what changed, what is open, where the next session starts.
 
 ## Log
 
+### 2026-11-09 · V2-09 pinned positions and galaxy settings
+
+- `layout.json` (ADR-0008): optional pins per galaxy, loaded and validated by `kb`, written
+  by `PUT /api/layout` with one commit. `placeGalaxies` keeps pins fixed and places only
+  new galaxies around them. "Figer la carte" in the universe fiche writes the current
+  positions; nothing is pinned without that gesture.
+- Galaxy fiche edits `review_after_days` and the discovery budget (sliders that always
+  sum to 100) through `PATCH /api/galaxy/{id}`; `_galaxy.md` is created if missing.
+- Validation: discovery shares that do not sum to 100 are now a problem.
+- The watcher also reloads on `layout.json` at the repo root.
+
 ### 2026-11-09 · V2-05 discovery frontier
 
 - `app.Frontier`: ranks `idea`/`explore` subjects for a scope into near, two hops and off

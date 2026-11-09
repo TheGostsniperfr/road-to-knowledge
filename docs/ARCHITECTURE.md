@@ -28,7 +28,8 @@ web/ (Vite, TypeScript, Preact)
 - **Edit a fiche in your editor**: fsnotify sees the file, the service reloads, the
   server sends `reload` over `/api/events`, the UI refetches and redraws.
 - **Change a level in the app**: `PATCH /api/star/{id}` rewrites only that frontmatter
-  key, commits the file, reloads.
+  key, commits the file, reloads. `PATCH /api/galaxy/{id}` does the same for review and
+  discovery settings in `_galaxy.md`, `PUT /api/layout` for pinned positions.
 - **Review**: each grade appends one line to `review/log.jsonl`; closing the drawer
   commits the log once.
 - **What next**: `app.Frontier` ranks `idea` and `explore` subjects around a scope and
