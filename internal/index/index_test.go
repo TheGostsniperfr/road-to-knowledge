@@ -63,3 +63,36 @@ func TestSearch_IgnoresAccentsAndFtsSyntax(t *testing.T) {
 	require.Len(t, hits, 1)
 	assert.Equal(t, "lang/japonais/kana", hits[0].ID)
 }
+
+func TestSearch_IgnoresStopwords_SoAFullQuestionStillMatches(t *testing.T) {
+	ix, err := index.Build(context.Background(), universe(t))
+	require.NoError(t, err)
+
+	hits, err := ix.Search(context.Background(), "comment avoir une isolation forte", 5)
+
+	require.NoError(t, err)
+	require.NotEmpty(t, hits)
+	assert.Equal(t, "tech/k8s/gvisor", hits[0].ID)
+}
+
+func TestSearch_PutsSubjectsMatchingEveryWordBeforeThoseMatchingSome(t *testing.T) {
+	ix, err := index.Build(context.Background(), universe(t))
+	require.NoError(t, err)
+
+	hits, err := ix.Search(context.Background(), "gvisor runc", 5)
+
+	require.NoError(t, err)
+	require.Len(t, hits, 2)
+	assert.Equal(t, "tech/k8s/runtime-class", hits[0].ID)
+	assert.Equal(t, "tech/k8s/gvisor", hits[1].ID)
+}
+
+func TestSearchAllWords_RequiresEveryWordIncludingStopwords(t *testing.T) {
+	ix, err := index.Build(context.Background(), universe(t))
+	require.NoError(t, err)
+
+	hits, err := ix.SearchAllWords(context.Background(), "comment avoir une isolation forte", 5)
+
+	require.NoError(t, err)
+	assert.Empty(t, hits)
+}
