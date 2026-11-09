@@ -24,16 +24,26 @@ func book(args []string) error {
 	title := fs.String("title", "", "title of the work, defaults to the file name")
 	author := fs.String("author", "", "author")
 	year := fs.Int("year", 0, "year of publication")
-	if err := fs.Parse(args[1:]); err != nil {
-		return err
+	// The flag package stops at the first positional argument; keep parsing after it so
+	// `rtk book add book.pdf --title X` works like `rtk book add --title X book.pdf`.
+	var files []string
+	for rest := args[1:]; ; {
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		if fs.NArg() == 0 {
+			break
+		}
+		files = append(files, fs.Arg(0))
+		rest = fs.Args()[1:]
 	}
-	if fs.NArg() != 1 {
+	if len(files) != 1 {
 		return errors.New("usage: rtk book add [--data DIR] [--title T] [--author A] [--year Y] FILE")
 	}
 	if *data == "" {
 		return errors.New("no knowledge folder: pass --data or set RTK_DATA")
 	}
-	src := fs.Arg(0)
+	src := files[0]
 	e, err := library.Add(*data, src)
 	if err != nil {
 		return err

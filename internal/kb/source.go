@@ -47,8 +47,15 @@ func ValidLibraryPath(p string) bool {
 	if p == "" || strings.Contains(p, "\\") || path.IsAbs(p) {
 		return false
 	}
-	clean := path.Clean(p)
-	return clean == p && strings.HasPrefix(clean, LibraryDir+"/") && !strings.Contains(clean, "..")
+	if path.Clean(p) != p || !strings.HasPrefix(p, LibraryDir+"/") {
+		return false
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if seg == ".." || seg == "." || seg == "" {
+			return false
+		}
+	}
+	return true
 }
 
 // Available reports whether the source file is on this machine.
