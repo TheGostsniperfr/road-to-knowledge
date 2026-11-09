@@ -129,6 +129,27 @@ func (r *Repo) Commit(ctx context.Context, message string, paths ...string) erro
 	return err
 }
 
+// Unstage puts the index back to HEAD for the given paths, after a commit that failed past `git add`.
+func (r *Repo) Unstage(ctx context.Context, paths ...string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rel := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if rp, err := filepath.Rel(r.root, p); err == nil {
+			rel = append(rel, filepath.ToSlash(rp))
+		}
+	}
+	if _, err := r.git(ctx, append([]string{"reset", "-q", "--"}, rel...)...); err != nil {
+		slog.Warn("unstage after failed commit", "err", err)
+	}
+}
+
+// HasBranch reports whether a local branch exists.
+func (r *Repo) HasBranch(ctx context.Context, name string) bool {
+	_, err := r.git(ctx, "rev-parse", "--verify", "--quiet", "refs/heads/"+name)
+	return err == nil
+}
+
 // Dirty lists which of the given paths (relative to the repo root) have uncommitted changes, untracked included.
 func (r *Repo) Dirty(ctx context.Context, rel ...string) ([]string, error) {
 	if len(rel) == 0 {
