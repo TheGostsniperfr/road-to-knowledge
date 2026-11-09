@@ -1,5 +1,5 @@
 // Package anki moves review cards between a knowledge repository and Anki: .apkg export and
-// import, and a push through the AnkiConnect add-on. The mapping is ADR-0010.
+// import, and a push through the AnkiConnect add-on. The mapping is ADR-0011.
 package anki
 
 import (
@@ -33,7 +33,9 @@ type Note struct {
 }
 
 // Collect lists the cards of a scope (universe "", galaxy, sub-theme or subject id) in repo order.
-func Collect(u *kb.Universe, scope string) ([]Note, error) {
+// A question repeated in a subject gives the same card id twice; only the first is kept and the
+// others are returned as duplicates (rtk validate reports them too).
+func Collect(u *kb.Universe, scope string) ([]Note, []kb.Card, error) {
 	var stars []*kb.Star
 	switch {
 	case scope == "":
@@ -47,9 +49,11 @@ func Collect(u *kb.Universe, scope string) ([]Note, error) {
 	case u.Star(scope) != nil:
 		stars = []*kb.Star{u.Star(scope)}
 	default:
-		return nil, fmt.Errorf("%w: %q", ErrScope, scope)
+		return nil, nil, fmt.Errorf("%w: %q", ErrScope, scope)
 	}
 	var out []Note
+	var dups []kb.Card
+	seen := map[string]bool{}
 	for _, s := range stars {
 		g, c := s.Cluster.Galaxy, s.Cluster
 		tags := []string{"rtk", "rtk::" + tagPart(g.ID) + "::" + tagPart(lastPart(c.ID))}
@@ -57,6 +61,11 @@ func Collect(u *kb.Universe, scope string) ([]Note, error) {
 			tags = append(tags, tagPart(t))
 		}
 		for _, card := range s.Cards {
+			if seen[card.ID] {
+				dups = append(dups, card)
+				continue
+			}
+			seen[card.ID] = true
 			out = append(out, Note{
 				CardID:  card.ID,
 				GUID:    GUID(card.ID),
@@ -68,7 +77,7 @@ func Collect(u *kb.Universe, scope string) ([]Note, error) {
 			})
 		}
 	}
-	return out, nil
+	return out, dups, nil
 }
 
 // DeckName nests decks as RtK::Galaxy::Sub-theme. "::" is Anki's separator, so it never appears inside a name.

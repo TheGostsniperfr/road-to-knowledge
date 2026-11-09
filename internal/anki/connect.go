@@ -39,7 +39,9 @@ func NewConnect(raw string) (*Connect, error) {
 	if ip := net.ParseIP(host); host != "localhost" && (ip == nil || !ip.IsLoopback()) {
 		return nil, fmt.Errorf("%w: %q", ErrNotLocal, raw)
 	}
-	return &Connect{url: u.String(), http: &http.Client{Timeout: 30 * time.Second}}, nil
+	// A redirect could send the deck off the machine; AnkiConnect never redirects.
+	noRedirect := func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &Connect{url: u.String(), http: &http.Client{Timeout: 30 * time.Second, CheckRedirect: noRedirect}}, nil
 }
 
 func (c *Connect) call(ctx context.Context, action string, params, out any) error {

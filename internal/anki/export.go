@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -45,9 +46,18 @@ const (
 
 var modelID = stableID("model", ModelName)
 
-// Export writes the notes as an .apkg. FSRS state is not exported (ADR-0010): the cards arrive
-// as new and Anki schedules them on its own.
+var ErrDuplicateCard = errors.New("duplicate card id")
+
+// Export writes the notes as an .apkg. FSRS state is not exported (ADR-0011): the cards arrive
+// as new and Anki schedules them on its own. Card ids must be unique; Collect guarantees it.
 func Export(ctx context.Context, notes []Note, w io.Writer, now time.Time) error {
+	seen := map[string]bool{}
+	for _, n := range notes {
+		if seen[n.CardID] {
+			return fmt.Errorf("anki export: %w: %q", ErrDuplicateCard, n.CardID)
+		}
+		seen[n.CardID] = true
+	}
 	tmp, err := os.MkdirTemp("", "rtk-anki-")
 	if err != nil {
 		return fmt.Errorf("anki export: %w", err)
