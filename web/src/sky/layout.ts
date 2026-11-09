@@ -1,4 +1,4 @@
-import type { GalaxyView, State, StarSummary, UniverseView } from "../api";
+import type { GalaxyView, Pin, State, StarSummary, UniverseView } from "../api";
 import { TAU, clamp, hash, mkRng, smooth } from "./rand";
 
 export interface GNode {
@@ -250,8 +250,12 @@ function placeGalaxies(gs: GNode[]) {
 }
 
 // Positions to write to layout.json so the map stays as it looks now.
-export function currentPins(l: Layout): Record<string, { x: number; y: number }> {
-  return Object.fromEntries(l.galaxies.map((g) => [g.id, { x: Math.round(g.x), y: Math.round(g.y) }]));
+// A rotation set by hand is carried over, so re-pinning never drops it.
+export function currentPins(l: Layout): Record<string, Pin> {
+  return Object.fromEntries(l.galaxies.map((g) => {
+    const rotation = g.data.pin?.rotation;
+    return [g.id, rotation === undefined ? { x: Math.round(g.x), y: Math.round(g.y) } : { x: Math.round(g.x), y: Math.round(g.y), rotation }];
+  }));
 }
 
 function separateClusters(cls: CNode[]) {
