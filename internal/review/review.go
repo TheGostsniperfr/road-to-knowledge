@@ -53,6 +53,8 @@ type Book struct {
 	sched   *fsrs.FSRS
 	entries []Entry
 	cards   map[string]fsrs.Card
+	// redirects maps ids from before a restructure; entries are replayed under the live id.
+	redirects Redirects
 }
 
 func Open(root string) (*Book, error) {
@@ -84,6 +86,14 @@ func (b *Book) Reload() error {
 	if err != nil {
 		return err
 	}
+	renames, err := readRenames(b.renamesPath())
+	if err != nil {
+		return err
+	}
+	redirects := NewRedirects(renames)
+	for i := range entries {
+		entries[i].Card = redirects.CardAt(entries[i].Card, entries[i].At)
+	}
 	sort.SliceStable(entries, func(i, j int) bool { return entries[i].At.Before(entries[j].At) })
 	cards := map[string]fsrs.Card{}
 	for _, e := range entries {
@@ -94,7 +104,7 @@ func (b *Book) Reload() error {
 		cards[e.Card] = b.sched.Next(c, e.At, fsrs.Rating(e.Rating)).Card
 	}
 	b.mu.Lock()
-	b.entries, b.cards = entries, cards
+	b.entries, b.cards, b.redirects = entries, cards, redirects
 	b.mu.Unlock()
 	return nil
 }
@@ -158,6 +168,8 @@ func (b *Book) Record(cardID string, rating Rating, now time.Time) (CardState, e
 	if !rating.Valid() {
 		return CardState{}, fmt.Errorf("review: invalid rating %d", rating)
 	}
+	// A page opened before a restructure still sends the old id: log it under the live one.
+	cardID = b.Redirects().Card(cardID)
 	e := Entry{Card: cardID, Rating: rating, At: now.UTC().Truncate(time.Second)}
 	line, err := json.Marshal(e)
 	if err != nil {
