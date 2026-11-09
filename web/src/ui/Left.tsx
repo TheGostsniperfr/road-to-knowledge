@@ -137,27 +137,59 @@ function Todo({ universe, selected, go }: { universe: UniverseView | null; selec
   const [scope, setScope] = useState(deepest);
   const [frontier, setFrontier] = useState<FrontierView | null>(null);
   const [err, setErr] = useState("");
+  const [all, setAll] = useState(false);
   useEffect(() => setScope(deepest), [deepest]);
   useEffect(() => {
     if (!universe) return;
-    api.frontier(scope).then((f) => { setFrontier(f); setErr(""); }).catch((e) => setErr(String(e)));
+    let live = true;
+    setFrontier(null);
+    api.frontier(scope)
+      .then((f) => { if (live) { setFrontier(f); setErr(""); } })
+      .catch((e) => { if (live) { setFrontier(null); setErr(String(e)); } });
+    return () => { live = false; };
   }, [scope, universe?.version]);
   if (!universe) return null;
 
+  const inScope = (id: string) => !scope || id.startsWith(scope + "/");
   const hue = new Map(universe.galaxies.map((g) => [g.id, g.hue]));
   const progress = universe.galaxies.flatMap((g) => g.clusters.flatMap((c) =>
-    c.stars.filter((s) => s.state === "progress" && (!scope || s.id.startsWith(scope + "/"))).map((s) => ({ s, g }))));
+    c.stars.filter((s) => s.state === "progress" && inScope(s.id)).map((s) => ({ s, g }))));
   const suggestions = frontier?.suggestions ?? [];
+
+  const chips = (
+    <div class="scopes" role="group" aria-label="Portée">
+      {scopes.map((s) => (
+        <button key={s.id} class={`chip${s.id === scope ? " on" : ""}`} aria-pressed={s.id === scope} onClick={() => setScope(s.id)}>{s.name}</button>
+      ))}
+      <button class={`chip all${all ? " on" : ""}`} aria-pressed={all} onClick={() => setAll(!all)}>Tout voir</button>
+    </div>
+  );
+
+  if (all) {
+    const order = { progress: 0, explore: 1, idea: 2, acquired: 3 };
+    const label = { progress: "en cours", explore: "à explorer", idea: "idée", acquired: "acquis" };
+    const items = universe.galaxies.flatMap((g) => g.clusters.flatMap((c) =>
+      c.stars.filter((s) => s.state !== "acquired" && inScope(s.id)).map((s) => ({ s, g }))));
+    items.sort((a, b) => order[a.s.state] - order[b.s.state]);
+    return (
+      <div>
+        {chips}
+        {!items.length && <p class="empty">Rien en attente. Le brouillard est dissipé.</p>}
+        {items.map(({ s, g }) => (
+          <div key={s.id} class="todo">
+            {dot(s, g.hue)}
+            <button onClick={() => go(s.id)}>{s.name}<small>{g.name} · {label[s.state]}</small></button>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div>
-      <div class="scopes" role="group" aria-label="Portée">
-        {scopes.map((s) => (
-          <button key={s.id} class={`chip${s.id === scope ? " on" : ""}`} aria-pressed={s.id === scope} onClick={() => setScope(s.id)}>{s.name}</button>
-        ))}
-      </div>
+      {chips}
       {err && <p class="empty">{err}</p>}
-      {frontier && !suggestions.length && <p class="empty">Rien à suggérer ici. Ajoute des sujets niveau 0 ou élargis la portée.</p>}
+      {frontier && !suggestions.length && <p class="empty">Aucun sujet en idée ou à explorer sous le niveau 3 ici. Ajoute-en ou élargis la portée.</p>}
       {frontier && buckets.map((b) => {
         const items = suggestions.filter((s) => s.bucket === b.key);
         if (!items.length) return null;
