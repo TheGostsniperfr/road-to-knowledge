@@ -65,6 +65,19 @@ func Open(root string) (*Book, error) {
 
 func (b *Book) Path() string { return b.path }
 
+// Since returns the reviews recorded at or after t, oldest first.
+func (b *Book) Since(t time.Time) []Entry {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var out []Entry
+	for _, e := range b.entries {
+		if !e.At.Before(t) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 // Reload re-reads the log, for instance after a git pull brought reviews from another machine.
 func (b *Book) Reload() error {
 	entries, err := readLog(b.path)

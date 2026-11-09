@@ -81,7 +81,7 @@ func TestPropose_WritesOnBranchWithoutTouchingCheckout(t *testing.T) {
 	dir := gitRepo(t)
 	r := gitx.Open(context.Background(), dir)
 
-	branch, err := r.Propose(context.Background(), "fiche-kana", "docs: fiche kana", []gitx.FileChange{{Path: "galaxies/lang/japonais/kana.md", Content: "---\nname: Kana\n---\n"}})
+	branch, err := r.Propose(context.Background(), "fiche-kana", "docs: fiche kana", []gitx.FileChange{{Path: "galaxies/lang/japonais/kana.md", Content: "---\nname: Kana\n---\n"}}, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "proposals/fiche-kana", branch)
@@ -93,10 +93,10 @@ func TestPropose_WritesOnBranchWithoutTouchingCheckout(t *testing.T) {
 func TestPropose_AppendsToExistingBranch(t *testing.T) {
 	dir := gitRepo(t)
 	r := gitx.Open(context.Background(), dir)
-	_, err := r.Propose(context.Background(), "seed", "one", []gitx.FileChange{{Path: "inbox/a.md", Content: "a"}})
+	_, err := r.Propose(context.Background(), "seed", "one", []gitx.FileChange{{Path: "inbox/a.md", Content: "a"}}, nil)
 	require.NoError(t, err)
 
-	_, err = r.Propose(context.Background(), "seed", "two", []gitx.FileChange{{Path: "inbox/b.md", Content: "b"}})
+	_, err = r.Propose(context.Background(), "seed", "two", []gitx.FileChange{{Path: "inbox/b.md", Content: "b"}}, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "3", git(t, dir, "rev-list", "--count", "proposals/seed"))
