@@ -49,10 +49,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/inbox", s.inbox)
 	mux.HandleFunc("GET /api/ai", s.aiPreview)
 	mux.HandleFunc("GET /api/events", s.events)
-	assets := filepath.Join(s.svc.Root(), "assets")
-	mux.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(os.DirFS(assets))))
-	library := filepath.Join(s.svc.Root(), "library")
-	mux.Handle("GET /library/", http.StripPrefix("/library/", http.FileServerFS(os.DirFS(library))))
+	mux.Handle("GET /assets/", confined("/assets/", filepath.Join(s.svc.Root(), "assets")))
+	mux.Handle("GET /library/", confined("/library/", filepath.Join(s.svc.Root(), "library")))
 	if s.mcp != nil {
 		mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s.mcp }, nil))
 	}
@@ -82,6 +80,24 @@ func guard(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// confined serves a folder of the knowledge repo read-only. os.Root refuses any path,
+// symlinks included, that resolves outside the folder. The folder is opened per request
+// because it may not exist yet when the server starts (library/ appears on the first book).
+// The sandbox CSP keeps an HTML or SVG file in the repo from running script on this origin.
+func confined(prefix, dir string) http.Handler {
+	return http.StripPrefix(prefix, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		root, err := os.OpenRoot(dir)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer root.Close()
+		w.Header().Set("Content-Security-Policy", "sandbox")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		http.FileServerFS(root.FS()).ServeHTTP(w, r)
+	}))
 }
 
 func spa(web fs.FS) http.Handler {

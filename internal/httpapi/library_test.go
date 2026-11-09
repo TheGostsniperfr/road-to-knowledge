@@ -63,6 +63,47 @@ func TestStar_SaysTheSourceIsMissing_WhenThePDFIsOnAnotherMachine(t *testing.T) 
 	assert.Equal(t, false, src["available"])
 }
 
+func TestStaticFolders_RefuseSymlinksThatLeaveTheFolder(t *testing.T) {
+	root := knowledge(t)
+	secret := filepath.Join(t.TempDir(), "secret.txt")
+	require.NoError(t, os.WriteFile(secret, []byte("token"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "library"), 0o755))
+	require.NoError(t, os.Symlink(secret, filepath.Join(root, "library", "leak.pdf")))
+	require.NoError(t, os.Symlink(secret, filepath.Join(root, "assets", "leak.svg")))
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	svc, err := app.New(context.Background(), root, log)
+	require.NoError(t, err)
+	ts := httptest.NewServer(httpapi.New(svc, log, nil, nil).Handler())
+	t.Cleanup(ts.Close)
+
+	for _, url := range []string{"/library/leak.pdf", "/assets/leak.svg"} {
+		res := do(t, "GET", ts.URL+url, "")
+		body, _ := io.ReadAll(res.Body)
+
+		assert.NotEqual(t, http.StatusOK, res.StatusCode, url)
+		assert.NotContains(t, string(body), "token", url)
+	}
+}
+
+func TestStaticFolders_AreSandboxed(t *testing.T) {
+	ts := bookServer(t, true)
+
+	for _, url := range []string{"/library/genki-0123abcd.pdf", "/assets/kana.svg"} {
+		res := do(t, "GET", ts.URL+url, "")
+
+		assert.Equal(t, http.StatusOK, res.StatusCode, url)
+		assert.Equal(t, "sandbox", res.Header.Get("Content-Security-Policy"), url)
+	}
+}
+
+func TestLibrary_Returns404_WhenNoBookWasAddedYet(t *testing.T) {
+	ts := bookServer(t, false)
+
+	res := do(t, "GET", ts.URL+"/library/genki-0123abcd.pdf", "")
+
+	assert.Equal(t, http.StatusNotFound, res.StatusCode)
+}
+
 func TestLibrary_ServesTheOriginalAndBlocksTraversal(t *testing.T) {
 	ts := bookServer(t, true)
 
