@@ -85,7 +85,7 @@ func New(svc *app.Service, version string) *mcp.Server {
 		Query string `json:"query" jsonschema:"words or a question in French or English; names match exactly, other words also by meaning"`
 		Limit int    `json:"limit,omitempty" jsonschema:"max results, default 10, at most 50"`
 	}
-	mcp.AddTool(s, &mcp.Tool{Name: "search", Description: "Search subjects by words and by meaning, best first, with id, name, a snippet and mode: words (the words appear), meaning (a paraphrase or the other language, no shared word) or both. Meaning is used once the local model has indexed the repo; until then results are words only. An empty list means nothing matched: try fewer or broader words."},
+	mcp.AddTool(s, &mcp.Tool{Name: "search", Description: "Search subjects by words and by meaning, best first, with id, name, a snippet, a score (higher is better, comparable only within one answer) and mode: words (the words appear), meaning (a paraphrase or the other language, no shared word) or both. Meaning is used when the server runs with a local model (rtk serve) and has indexed the repo; otherwise results are words only. An empty list means nothing matched: try fewer or broader words."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, any, error) {
 			hits, err := svc.Search(ctx, in.Query, in.Limit)
 			if err != nil {
