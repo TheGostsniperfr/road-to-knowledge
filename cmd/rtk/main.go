@@ -29,6 +29,7 @@ const usage = `rtk: Road to Knowledge
   rtk mcp      [--data DIR]                           MCP over stdio, for Claude Code
   rtk validate [--data DIR]                           check every file, exit 1 on problems
   rtk init     DIR                                    create an empty knowledge folder
+  rtk book add [--data DIR] [--title T] FILE          put a PDF in the git-ignored library, print its source block
 
 DIR defaults to $RTK_DATA.
 `
@@ -52,6 +53,8 @@ func main() {
 		err = validate(os.Args[2:])
 	case "init":
 		err = initData(os.Args[2:])
+	case "book":
+		err = book(os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 	default:
@@ -139,7 +142,7 @@ func initData(args []string) error {
 		return fmt.Errorf("%s already holds galaxies", dir)
 	}
 	files := map[string]string{
-		".gitignore":                              ".rtk/\n*.tmp\n",
+		".gitignore":                              ".rtk/\n*.tmp\nlibrary/\n",
 		"review/.gitkeep":                         "",
 		"inbox/.gitkeep":                          "",
 		"assets/.gitkeep":                         "",
