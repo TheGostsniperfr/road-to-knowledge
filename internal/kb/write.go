@@ -34,6 +34,9 @@ func SetFields(path string, fields map[string]any) error {
 		if err := v.Encode(fields[key]); err != nil {
 			return fmt.Errorf("set fields: encode %s: %w", key, err)
 		}
+		if v.Kind == yaml.MappingNode {
+			v.Style = yaml.FlowStyle
+		}
 		set := false
 		for i := 0; i+1 < len(m.Content); i += 2 {
 			if m.Content[i].Value == key {
