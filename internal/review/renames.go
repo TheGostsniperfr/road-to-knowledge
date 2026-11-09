@@ -23,14 +23,24 @@ type Rename struct {
 	At   time.Time `json:"at"`
 }
 
-// Redirects resolves old ids to live ones by replaying the renames, in time order, that happened
-// after the id was written. Time matters: a card split out of a subject and merged back later
-// must land where it is today, and a subject moved away and back must end where it started.
+// Live says whether an id (theme, sub-theme, subject or card) exists in the files today.
+type Live func(id string) bool
+
+// Redirects resolves old ids to live ones by replaying the renames in time order.
+//
+// An id that is not live today follows every rename, whatever the time of the review: a
+// rename stamped when a proposal was written still catches the reviews made before the user
+// merged it, here or on another machine. Time only decides for an id that is live again (a
+// subject moved away and back, or a new subject that reuses an old id): its reviews written
+// after the rename belong to the subject living there now and stay put.
 type Redirects struct {
 	renames []Rename
+	live    Live
 }
 
-func NewRedirects(renames []Rename) Redirects {
+// NewRedirects builds a resolver; a nil live treats every id as gone, which is right for a
+// log read before the files are loaded.
+func NewRedirects(renames []Rename, live Live) Redirects {
 	sorted := make([]Rename, 0, len(renames))
 	for _, r := range renames {
 		if r.From != "" && r.To != "" && r.From != r.To {
@@ -38,22 +48,35 @@ func NewRedirects(renames []Rename) Redirects {
 		}
 	}
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].At.Before(sorted[j].At) })
-	return Redirects{renames: sorted}
+	if live == nil {
+		live = func(string) bool { return false }
+	}
+	return Redirects{renames: sorted, live: live}
 }
 
-// resolve applies every rename not older than since. A card id ("<subject>:<hash>") follows an
-// explicit card rename, otherwise its subject, so a card that moved with its subject needs no line.
-func (r Redirects) resolve(id string, since time.Time) string {
+// resolve replays renames on an id written at t (zero when unknown: a live id then stays). A card
+// id ("<subject>:<hash>") follows an explicit card rename, otherwise its subject, so a card that
+// moved with its subject needs no line of its own.
+func (r Redirects) resolve(id string, t time.Time) string {
+	if t.IsZero() && r.live(id) {
+		return id
+	}
 	for _, x := range r.renames {
-		if x.At.Before(since) {
+		subject := false
+		if id != x.From {
+			i := strings.LastIndexByte(id, ':')
+			if i <= 0 || id[:i] != x.From {
+				continue
+			}
+			subject = true
+		}
+		if r.live(x.From) && (t.IsZero() || t.After(x.At)) {
 			continue
 		}
-		if id == x.From {
+		if subject {
+			id = x.To + id[strings.LastIndexByte(id, ':'):]
+		} else {
 			id = x.To
-			continue
-		}
-		if i := strings.LastIndexByte(id, ':'); i > 0 && id[:i] == x.From {
-			id = x.To + id[i:]
 		}
 	}
 	return id
@@ -68,10 +91,11 @@ func (r Redirects) ID(id string) (string, bool) {
 // Card resolves a card id written at an unknown time, e.g. by a page opened before a restructure.
 func (r Redirects) Card(id string) string { return r.resolve(id, time.Time{}) }
 
-// CardAt resolves a card id as it was written at t: only later renames apply.
+// CardAt resolves a card id as it was written at t.
 func (r Redirects) CardAt(id string, t time.Time) string { return r.resolve(id, t) }
 
-// All maps every renamed subject, sub-theme or theme id to its live id, for the UI's deep links.
+// All maps every renamed theme, sub-theme or subject id that is not live to its live id, for the
+// UI's deep links.
 func (r Redirects) All() map[string]string {
 	out := map[string]string{}
 	for _, x := range r.renames {
@@ -156,6 +180,13 @@ func (b *Book) renamesPath() string {
 
 // RenamesFile is the absolute path of the rename log, for commits.
 func (b *Book) RenamesFile() string { return b.renamesPath() }
+
+// SetLive tells the book which ids exist in the files; the next Reload resolves renames with it.
+func (b *Book) SetLive(live Live) {
+	b.mu.Lock()
+	b.live = live
+	b.mu.Unlock()
+}
 
 // Redirects returns the resolver built at the last reload.
 func (b *Book) Redirects() Redirects {
