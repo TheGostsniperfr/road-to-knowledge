@@ -18,6 +18,7 @@ import (
 	"github.com/TheGostsniperfr/road-to-knowledge/internal/gitx"
 	"github.com/TheGostsniperfr/road-to-knowledge/internal/index"
 	"github.com/TheGostsniperfr/road-to-knowledge/internal/kb"
+	"github.com/TheGostsniperfr/road-to-knowledge/internal/news"
 	"github.com/TheGostsniperfr/road-to-knowledge/internal/review"
 )
 
@@ -44,6 +45,11 @@ type Service struct {
 
 	subsMu sync.Mutex
 	subs   map[chan int64]struct{}
+
+	newsOnce  sync.Once
+	newsStore *news.Store
+	newsErr   error
+	newsMu    sync.Mutex
 }
 
 func New(ctx context.Context, root string, log *slog.Logger) (*Service, error) {
