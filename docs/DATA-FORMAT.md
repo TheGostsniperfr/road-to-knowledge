@@ -52,7 +52,8 @@ appears, so the news can bring subjects you do not have yet. "Tout" in the app a
 `all: true` in `news()` show everything regardless.
 
 `sources` lists feeds (RSS 2.0, RSS 1.0 or Atom) for the theme; `_cluster.md` accepts the
-same key for a sub-theme. Only `http`/`https` URLs without credentials are accepted; others
+same key for a sub-theme; a URL listed in both is fetched once, under the theme. Only
+`http`/`https` URLs without credentials are accepted; others
 are reported as problems. Articles are matched to subjects by name, by each part of a
 compound name ("Helm et Kustomize"), by `tags` and by sub-theme name. Names under three
 characters ("Go", "C") only match through a longer tag such as `golang`.
