@@ -16,6 +16,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/TheGostsniperfr/road-to-knowledge/internal/app"
+	"github.com/TheGostsniperfr/road-to-knowledge/internal/embed"
 	"github.com/TheGostsniperfr/road-to-knowledge/internal/httpapi"
 	"github.com/TheGostsniperfr/road-to-knowledge/internal/kb"
 	"github.com/TheGostsniperfr/road-to-knowledge/internal/mcpserver"
@@ -28,7 +29,7 @@ const usage = `rtk: Road to Knowledge
 
   rtk serve    [--data DIR] [--addr 127.0.0.1:7878] [--news-every 6h] [--model ID|off]
                                                       web app + API + MCP over HTTP at /mcp
-  rtk mcp      [--data DIR] [--model ID|off]          MCP over stdio, for Claude Code
+  rtk mcp      [--data DIR] [--model off|ID]          MCP over stdio, for Claude Code (words only by default)
   rtk models   pull|list [--model ID]                 download the local model for search by meaning
   rtk bench    search [--data DIR] [--queries FILE]   score words vs meaning vs hybrid search
   rtk news     fetch|list [--data DIR] [--scope ID] [--since 7d] [--all]
@@ -69,7 +70,7 @@ func main() {
 	case "models":
 		err = modelsCmd(ctx, os.Args[2:])
 	case "bench":
-		err = benchCmd(ctx, log, os.Args[2:])
+		err = benchCmd(ctx, os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 	default:
@@ -98,13 +99,13 @@ func serve(ctx context.Context, log *slog.Logger, args []string) error {
 	data := dataFlag(fs)
 	addr := fs.String("addr", "127.0.0.1:7878", "listen address, keep it on localhost")
 	newsEvery := fs.Duration("news-every", 6*time.Hour, "fetch the theme feeds this often, 0 to disable")
-	model := modelFlag(fs)
+	model := modelFlag(fs, embed.Default)
 	fs.Parse(args)
 	svc, err := open(ctx, log, *data)
 	if err != nil {
 		return err
 	}
-	enableSemantic(ctx, svc, *model)
+	defer enableSemantic(ctx, svc, *model)()
 	go svc.RunNews(ctx, *newsEvery)
 	go func() {
 		if err := svc.Watch(ctx); err != nil {
@@ -122,13 +123,15 @@ func serve(ctx context.Context, log *slog.Logger, args []string) error {
 func stdio(ctx context.Context, log *slog.Logger, args []string) error {
 	fs := flag.NewFlagSet("mcp", flag.ExitOnError)
 	data := dataFlag(fs)
-	model := modelFlag(fs)
+	// Every Claude Code session starts its own `rtk mcp`; loading a model in each would cost
+	// hundreds of MB per session. Search by meaning is shared through `rtk serve` and /mcp instead.
+	model := modelFlag(fs, "off")
 	fs.Parse(args)
 	svc, err := open(ctx, log, *data)
 	if err != nil {
 		return err
 	}
-	enableSemantic(ctx, svc, *model)
+	defer enableSemantic(ctx, svc, *model)()
 	go svc.Watch(ctx)
 	return mcpserver.New(svc, version).Run(ctx, &mcp.StdioTransport{})
 }
