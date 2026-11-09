@@ -108,7 +108,16 @@ func (r *Repo) Commit(ctx context.Context, message string, paths ...string) erro
 		if err != nil {
 			return fmt.Errorf("commit: %w", err)
 		}
+		// A removed file is staged as a deletion if git knew it; one git never saw has nothing to commit.
+		if _, err := os.Lstat(p); errors.Is(err, os.ErrNotExist) {
+			if out, err := r.git(ctx, "ls-files", "--", filepath.ToSlash(rp)); err != nil || strings.TrimSpace(out) == "" {
+				continue
+			}
+		}
 		rel = append(rel, filepath.ToSlash(rp))
+	}
+	if len(rel) == 0 {
+		return nil
 	}
 	if _, err := r.git(ctx, append([]string{"add", "--"}, rel...)...); err != nil {
 		return err
@@ -161,7 +170,45 @@ type FileChange struct {
 	// Data carries a binary asset instead of Content. Only trusted callers (the Anki import)
 	// build it: MCP tools never fill it, so agents still write Markdown only.
 	Data []byte
+	// From moves an existing file to Path before Content is written, so history follows it.
+	// Only a restructure planned by the server sets it (see Restructure).
+	From string
+	// Restructure marks a change computed by app.Restructure from the current files: it may move
+	// or delete subjects and append to review/renames.jsonl. The MCP propose tool never sets it,
+	// so an agent still cannot remove a subject by writing raw file changes.
+	Restructure bool
 }
+
+// RenamesFile is the only non-Markdown file a restructure proposal writes.
+const RenamesFile = "review/renames.jsonl"
+
+func validChange(f FileChange) (string, error) {
+	if f.Data != nil {
+		return ValidAssetPath(f.Path)
+	}
+	if f.Restructure && filepath.ToSlash(filepath.Clean(f.Path)) == RenamesFile {
+		return RenamesFile, nil
+	}
+	clean, err := ValidProposalPath(f.Path)
+	if err != nil {
+		return "", err
+	}
+	if f.Delete && !strings.HasPrefix(clean, "inbox/") && !(f.Restructure && strings.HasPrefix(clean, "galaxies/")) {
+		return "", ErrBadDelete
+	}
+	if f.From != "" {
+		from, err := ValidProposalPath(f.From)
+		if err != nil {
+			return "", err
+		}
+		if !f.Restructure || !strings.HasPrefix(from, "galaxies/") || !strings.HasPrefix(clean, "galaxies/") {
+			return "", ErrBadMove
+		}
+	}
+	return clean, nil
+}
+
+var ErrBadMove = errors.New("only a restructure moves files, and only inside galaxies/")
 
 var ErrBadAsset = errors.New("asset must be an image or audio file under assets/anki/")
 
@@ -193,18 +240,14 @@ func (r *Repo) Propose(ctx context.Context, slug, message string, files []FileCh
 		return "", fmt.Errorf("propose: invalid branch name %q: use lowercase words joined by dashes, e.g. fiche-kana", branch)
 	}
 	for i, f := range files {
-		valid := ValidProposalPath
-		if f.Data != nil {
-			valid = ValidAssetPath
-		}
-		clean, err := valid(f.Path)
+		clean, err := validChange(f)
 		if err != nil {
 			return "", fmt.Errorf("propose %s: %w", f.Path, err)
 		}
-		if f.Delete && !strings.HasPrefix(clean, "inbox/") {
-			return "", fmt.Errorf("propose %s: %w", f.Path, ErrBadDelete)
-		}
 		files[i].Path = clean
+		if f.From != "" {
+			files[i].From = filepath.ToSlash(filepath.Clean(f.From))
+		}
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -250,6 +293,12 @@ func (r *Repo) Propose(ctx context.Context, slug, message string, files []FileCh
 		}
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			return "", fmt.Errorf("propose: %w", err)
+		}
+		if f.From != "" {
+			if err := os.Rename(filepath.Join(tmp, filepath.FromSlash(f.From)), full); err != nil {
+				return "", fmt.Errorf("propose: move %s: %w", f.From, err)
+			}
+			rel = append(rel, f.From)
 		}
 		data := f.Data
 		if data == nil {
