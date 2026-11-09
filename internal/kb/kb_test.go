@@ -108,6 +108,17 @@ func TestLoad_ReportsProblem_WhenLevelIsOutOfRange(t *testing.T) {
 	assert.Equal(t, 5, u.Star("lang/japonais/keigo").Level)
 }
 
+func TestLoad_ReportsProblem_WhenAQuestionAppearsTwiceInASubject(t *testing.T) {
+	root := fixture(t)
+	writeFile(t, root, "galaxies/lang/japonais/keigo.md", "---\nname: Keigo\n---\nです :: copule polie\n- です :: copule\n")
+
+	_, problems, err := kb.Load(root)
+
+	require.NoError(t, err)
+	require.Len(t, problems, 1)
+	assert.Contains(t, problems[0].Message, "appears twice")
+}
+
 func TestLoad_ReportsProblem_WhenDiscoveryIsNegative(t *testing.T) {
 	root := fixture(t)
 	writeFile(t, root, "galaxies/lang/_galaxy.md", "---\nname: Langues\ndiscovery: { near: 120, two_hops: 0, off_piste: -20 }\n---\n")
