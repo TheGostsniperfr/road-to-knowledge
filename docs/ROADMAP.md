@@ -24,7 +24,7 @@ issue body.
 - [x] V2-05 Discovery: frontier suggestions with the per-theme budget, `frontier()` tool
 - [x] V2-06 Morning brief: Miniflux collection, Claude routine triage, sources tab
 - [x] V2-07 Evening inbox triage routine
-- [ ] V2-08 Granularity: split, merge and move subjects with history kept
+- [x] V2-08 Granularity: split, merge and move subjects with history kept
 - [x] V2-09 Pinned positions (`layout.json`) and editing discovery settings in the app
 - [x] V2-10 Teach-back recap: an agent quizzes you on what you may have forgotten
 - [x] V2-11 Atlas: a second, professional map view (circle packing, light and dark)

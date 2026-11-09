@@ -21,6 +21,9 @@ MCP, without loading everything.
 - **Anki**: `rtk anki export` writes an `.apkg` (also a button on every theme), `rtk anki push`
   updates a running Anki through AnkiConnect, `rtk anki import` turns any deck into cards in
   `inbox/` (decks with media land on a proposal branch). Re-exports update the same notes in Anki instead of duplicating them (ADR-0011).
+- **Reshape the map**: "Réorganiser" in a fiche, or `rtk mv`, `rtk split`, `rtk merge`,
+  moves, renames, splits or merges subjects with one commit. Review history, links and old
+  deep links follow (ADR-0014); a merge keeps the highest level.
 - **Never forgets for you**: a level never drops on its own. A subject not reviewed for
   longer than its theme allows only gets an amber dot.
 - **Veille**: list RSS or Atom feeds in a theme (`sources:`). The "Veille" tab shows the

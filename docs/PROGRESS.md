@@ -10,10 +10,25 @@ what changed, what is open, where the next session starts.
    prints the open items). Roadmap and ids: [`ROADMAP.md`](ROADMAP.md).
 3. Next action: V1-08. Brian uses the app on his real knowledge repo
    (`TheGostsniperfr/knowledge`) for a week, with the MCP server connected (`docs/MCP.md`);
-   collect feedback in issues. Then V2-08 (granularity) or V2-01
-   (mobile) with him.
+   collect feedback in issues. Then V2-01 (mobile) with him.
 
 ## Log
+
+### 2026-11-09 · V2-08 restructure: move, rename, split, merge
+
+- `internal/app/restructure.go` (ADR-0014): plans an operation from the current files (dry
+  run), then applies it with one commit (app, `rtk mv|split|merge`) or writes it on a
+  proposal branch (MCP `restructure`). Links in other subjects are rewritten; a merge keeps
+  the highest level and refuses a question with two different answers.
+- `review/renames.jsonl`: append-only id changes. The review log is replayed through it with
+  each review's own time, so history survives move, split, merge and round trips; old ids
+  redirect in the API, MCP tools and deep links (`redirects` in `/api/universe`).
+- `gitx`: a change may move a file (`From`) and a restructure may delete subjects and write
+  the rename log; `propose` from an agent still cannot. `Commit` stages deletions.
+- UI: "Réorganiser" in the subject fiche (Déplacer, Renommer, Scinder, Fusionner avec…)
+  shows the plan before applying, in both themes.
+- Open: an apply that fails halfway (disk error) leaves the files moved so far uncommitted;
+  galaxy (theme) renames are not supported; a sub-theme can only move into an existing theme.
 
 ### 2026-11-09 · V2-02 search by meaning
 

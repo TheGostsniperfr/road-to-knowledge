@@ -9,7 +9,7 @@ knowledge repo (Markdown, git)
 internal/kb        parse folders and frontmatter, cards, notions, links, problems
 internal/index     SQLite FTS5 in memory, rebuilt on reload
 internal/library   git-ignored library/ of book originals, named by content hash (ADR-0010)
-internal/review    FSRS, append-only log replayed in time order
+internal/review    FSRS, append-only log replayed in time order through the rename log (ADR-0014)
 internal/gitx      commits from the app; proposals/* branches through a temporary worktree
 internal/news      RSS/Atom fetcher, cache in .rtk/news (never committed), subject matching
 internal/anki      .apkg export and import, AnkiConnect push (ADR-0011)
