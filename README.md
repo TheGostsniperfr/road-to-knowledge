@@ -20,11 +20,14 @@ MCP, without loading everything.
   FSRS from an append-only log, scoped to wherever you are zoomed.
 - **Never forgets for you**: a level never drops on its own. A subject not reviewed for
   longer than its theme allows only gets an amber dot.
+- **Veille**: list RSS or Atom feeds in a theme (`sources:`). The "Veille" tab shows the
+  articles that mention your subjects, and the `morning-brief` skill turns them into a short
+  brief each morning.
 - **AI-ready**: `rtk mcp` exposes `profile`, `subgraph`, `node`, `fragments`, `search`,
-  `frontier`, `at_risk`, `due`, `recent`, `inbox`, `capture` and `propose`. Agents write to
+  `frontier`, `news`, `at_risk`, `due`, `recent`, `inbox`, `capture` and `propose`. Agents write to
   `inbox/` or to a `proposals/*` branch, never to your main branch, and a proposal that would
   break a file or lower a level is refused. The "Ce que l'IA reçoit" tab shows exactly what an
-  agent gets. Skills for Claude Code: `seed`, `inbox-triage`, `teach-back`. See [docs/MCP.md](docs/MCP.md).
+  agent gets. Skills for Claude Code: `seed`, `book-ingest`, `inbox-triage`, `teach-back`, `morning-brief`. See [docs/MCP.md](docs/MCP.md).
 
 ## Quick start
 
