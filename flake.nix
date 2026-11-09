@@ -11,7 +11,8 @@
       # Development environment only: the server runs with `make serve`, no NixOS module on purpose.
       devShells = forAll (pkgs: {
         default = pkgs.mkShell {
-          packages = with pkgs; [ go gopls gnumake nodejs_24 git gh jq ];
+          # poppler-utils: pdftotext/pdfinfo for book-ingest, and pdftoppm, which Claude Code needs to read PDF page ranges.
+          packages = with pkgs; [ go gopls gnumake nodejs_24 git gh jq poppler-utils ];
         };
       });
     };
