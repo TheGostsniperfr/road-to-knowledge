@@ -11,6 +11,7 @@ internal/index     SQLite FTS5 in memory, rebuilt on reload
 internal/library   git-ignored library/ of book originals, named by content hash (ADR-0010)
 internal/review    FSRS, append-only log replayed in time order
 internal/gitx      commits from the app; proposals/* branches through a temporary worktree
+internal/news      RSS/Atom fetcher, cache in .rtk/news (never committed), subject matching
         ▼
 internal/app       Service: the loaded universe and the views shared by API and MCP
    ├── internal/httpapi    JSON API, SSE reload events, /assets, /mcp, embedded web app

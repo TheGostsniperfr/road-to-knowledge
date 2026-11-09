@@ -29,6 +29,9 @@ hue: 168                 # 0-360, the galaxy's colour; derived from the id when 
 shape: spiral            # spiral | barred | ring | elliptical | lenticular | irregular
 review_after_days: 21    # after this, an unreviewed subject gets the amber dot
 discovery: { near: 70, two_hops: 20, off_piste: 10, news: false }   # shares sum to 100
+sources:                 # RSS or Atom feeds for the "Veille" tab and news()
+  - url: https://www.tofugu.com/feed.xml
+    name: Tofugu
 ---
 ```
 
@@ -41,8 +44,22 @@ known at level 3 or more, or when marked `acquired`.
 - `off_piste`: no known neighbour, least covered sub-themes first. Taken from the scope and one level above
   the scope, so a sub-theme points to its siblings and a galaxy to other galaxies.
 
-Percentages cannot be negative and must sum to 100. A bucket without enough candidates gives its slots to the others. `news` is reserved for
-V2-06.
+Percentages cannot be negative and must sum to 100. A bucket without enough candidates gives its slots to the others.
+
+`news` decides what the theme's feeds may show. Off (the default), only articles that
+mention one of your subjects or sub-themes appear; on, every article of the theme's feeds
+appears, so the news can bring subjects you do not have yet. "Tout" in the app and
+`all: true` in `news()` show everything regardless.
+
+`sources` lists feeds (RSS 2.0, RSS 1.0 or Atom) for the theme; `_cluster.md` accepts the
+same key for a sub-theme. Only `http`/`https` URLs without credentials are accepted; others
+are reported as problems. Articles are matched to subjects by name, by each part of a
+compound name ("Helm et Kustomize"), by `tags` and by sub-theme name. Names under three
+characters ("Go", "C") only match through a longer tag such as `golang`.
+
+Fetched articles are a cache in `.rtk/news/` (git-ignored, kept 30 days), never knowledge:
+delete the folder and the next fetch rebuilds it. `rtk serve` fetches at start and every
+six hours (`--news-every`), `rtk news fetch` on demand.
 
 The galaxy fiche in the app edits `review_after_days` and `discovery` and commits the file.
 
