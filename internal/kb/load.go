@@ -153,6 +153,13 @@ func Load(root string) (*Universe, []Problem, error) {
 				s.Summary = summarize(body)
 				s.Planets = extractPlanets(sid, body)
 				s.Cards = extractCards(sid, body)
+				seen := map[string]bool{}
+				for _, card := range s.Cards {
+					if seen[card.ID] {
+						report(f, "question %q appears twice; only the first card is kept for review and export", card.Question)
+					}
+					seen[card.ID] = true
+				}
 				u.stars[sid] = s
 				c.Stars = append(c.Stars, s)
 			}
