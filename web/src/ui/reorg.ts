@@ -6,13 +6,34 @@ export function slugify(s: string): string {
 }
 
 // liveId follows a restructure: an old deep link or a bookmark opens the subject where it is now.
-export function liveId(id: string, redirects?: Record<string, string>): string {
+// An id that exists today is never redirected, even if an older subject once had it.
+export function liveId(id: string, u: UniverseView | null | undefined): string {
+  const redirects = u?.redirects;
   if (!redirects) return id;
   const hash = id.indexOf("#");
   const base = hash < 0 ? id : id.slice(0, hash);
+  if (idsOf(u).has(base)) return id;
   const to = redirects[base];
   if (!to) return id;
   return hash < 0 ? to : to + id.slice(hash);
+}
+
+const idCache = new WeakMap<UniverseView, Set<string>>();
+
+export function idsOf(u: UniverseView): Set<string> {
+  let ids = idCache.get(u);
+  if (!ids) {
+    ids = new Set();
+    for (const g of u.galaxies) {
+      ids.add(g.id);
+      for (const c of g.clusters) {
+        ids.add(c.id);
+        for (const s of c.stars) ids.add(s.id);
+      }
+    }
+    idCache.set(u, ids);
+  }
+  return ids;
 }
 
 // afterPlan is where the subject shown in the fiche lives once the plan is applied.

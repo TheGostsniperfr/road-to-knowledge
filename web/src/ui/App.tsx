@@ -71,7 +71,7 @@ export function App() {
     sky.current?.setUniverse(universe);
     if (first.current) {
       first.current = false;
-      const id = liveId(decodeURIComponent(initialHash.current.replace(/^#\/?/, "")), universe.redirects);
+      const id = liveId(decodeURIComponent(initialHash.current.replace(/^#\/?/, "")), universe);
       if (id) setTimeout(() => sky.current?.select(id, true), 400);
     } else if (pending.current) {
       sky.current?.select(pending.current, true);
@@ -86,7 +86,7 @@ export function App() {
     history.replaceState(null, "", h === " " ? location.pathname : h);
   }, [selected]);
 
-  const go = useCallback((id: string) => sky.current?.select(liveId(id, universeRef.current?.redirects), true), []);
+  const go = useCallback((id: string) => sky.current?.select(liveId(id, universeRef.current), true), []);
   const reloadAt = useCallback(async (id: string) => { pending.current = id; await load(); }, [load]);
   const scope = scopeOf(selected);
   const due = dueIn(universe, scope.id, excluded.get(scope.id));

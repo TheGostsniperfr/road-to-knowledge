@@ -118,10 +118,10 @@ export interface FileOp { kind: "move" | "write" | "delete"; path: string; from?
 
 export interface Rename { from: string; to: string; at: string }
 
-export interface RestructurePlan { op: RestructureOp; files: FileOp[]; renames: Rename[]; summary: string[]; message: string }
+export interface RestructurePlan { op: RestructureOp; files: FileOp[]; renames: Rename[]; summary: string[]; message: string; hash: string }
 
 export const restructureApi = {
-  run: (op: RestructureOp, dryRun: boolean) => req<RestructurePlan>("POST", "/api/restructure", { ...op, dry_run: dryRun }),
+  run: (op: RestructureOp, dryRun: boolean, planHash = "") => req<RestructurePlan>("POST", "/api/restructure", { ...op, dry_run: dryRun, plan_hash: planHash }),
 };
 
 export const newsApi = {
