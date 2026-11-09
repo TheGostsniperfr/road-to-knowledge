@@ -119,6 +119,7 @@ export class Sky {
   destroy() {
     this.cleanup.forEach((f) => f());
     this.visible = false;
+    this.gl?.release();
   }
 
   // --- camera ---

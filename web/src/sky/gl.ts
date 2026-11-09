@@ -113,6 +113,11 @@ export class SkyGL {
     }
   }
 
+  // Browsers cap live WebGL contexts; switching views must give this one back.
+  release() {
+    this.gl.getExtension("WEBGL_lose_context")?.loseContext();
+  }
+
   private constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
     this.progs.stars = this.compile(STARS_VS, STARS_FS);

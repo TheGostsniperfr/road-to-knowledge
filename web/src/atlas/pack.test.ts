@@ -64,4 +64,19 @@ describe("buildAtlas", () => {
 
     expect(hit(a.root, s.x, s.y).id).toBe("tech/nix/flakes");
   });
+
+  it("leaves out a theme with no subject so no circle has a zero radius", () => {
+    const u = universe();
+    u.galaxies.push({ ...u.galaxies[1], id: "vide", name: "Vide", clusters: [{ id: "vide/rien", name: "Rien", stars: [] }] });
+
+    const a = buildAtlas(buildLayout(u));
+
+    expect([...a.byId.values()].filter((c) => !(c.r > 0)).map((c) => c.id)).toEqual([]);
+  });
+
+  it("builds an empty universe without throwing", () => {
+    const a = buildAtlas(buildLayout({ version: 1, inbox: 0, problems: [], galaxies: [] }));
+
+    expect(a.root.children).toEqual([]);
+  });
 });
