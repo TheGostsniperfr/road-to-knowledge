@@ -68,6 +68,7 @@ h1, h2, h3, h4 { font-family: var(--display); margin: 0; line-height: 1.1; }
 .scopes { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; border-bottom: 1px solid var(--rule); }
 .chip { all: unset; cursor: pointer; font-size: .72rem; padding: 3px 9px; border: 1px solid var(--rule); border-radius: 999px; color: var(--muted); }
 .chip:hover, .chip:focus-visible { color: var(--ink); border-color: var(--muted); }
+.chip.all { margin-left: auto; }
 .chip.on { color: var(--ink-strong); border-color: var(--accent); }
 .fgroup h4 { display: flex; margin: 12px 10px 2px; font-family: var(--display); font-size: .7rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .capture { padding: 10px; display: grid; gap: 8px; border-bottom: 1px solid var(--rule); }
