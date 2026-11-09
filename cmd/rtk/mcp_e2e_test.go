@@ -23,15 +23,31 @@ import (
 // streamable HTTP endpoint of `rtk serve`. They catch what in-memory transports cannot: flags, logs
 // on stdout, the Host/Origin guard, and the route itself.
 
+var (
+	binPath  string
+	buildErr error
+)
+
+// TestMain builds rtk once for every test in this package.
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "rtk-e2e-")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	binPath = filepath.Join(dir, "rtk")
+	if out, err := exec.Command("go", "build", "-o", binPath, ".").CombinedOutput(); err != nil {
+		buildErr = fmt.Errorf("go build: %w: %s", err, out)
+	}
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
+}
+
 func buildBinary(t *testing.T) string {
 	t.Helper()
-	if testing.Short() {
-		t.Skip("builds the binary")
-	}
-	bin := filepath.Join(t.TempDir(), "rtk")
-	out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput()
-	require.NoError(t, err, string(out))
-	return bin
+	require.NoError(t, buildErr)
+	return binPath
 }
 
 // copyExamples copies examples/knowledge into a fresh git repository, so propose() has a main branch.
