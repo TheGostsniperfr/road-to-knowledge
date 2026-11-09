@@ -283,7 +283,8 @@ func (s *Service) Propose(ctx context.Context, slug, message string, files []git
 	if strings.TrimSpace(message) == "" {
 		return "", fmt.Errorf("propose: empty commit message, use a conventional one like \"feat(seed): japonais\": %w", ErrInvalid)
 	}
-	branch, err := s.git.Propose(ctx, slug, message, files, s.checkProposal)
+	check := func(dir string, paths []string) error { return s.checkProposal(slug, dir, paths) }
+	branch, err := s.git.Propose(ctx, slug, message, files, check)
 	if errors.Is(err, gitx.ErrBadPath) || errors.Is(err, gitx.ErrBadDelete) || errors.Is(err, errBadProposal) || errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
@@ -292,19 +293,40 @@ func (s *Service) Propose(ctx context.Context, slug, message string, files []git
 
 var errBadProposal = errors.New("proposal refused")
 
+// subjectPathProblem rejects galaxies/ paths the loader would ignore or misread: a subject sits at
+// galaxies/<theme>/<sub-theme>/<subject>.md, settings in _galaxy.md and _cluster.md.
+func subjectPathProblem(p string) string {
+	if !strings.HasPrefix(p, "galaxies/") {
+		return ""
+	}
+	parts := strings.Split(p, "/")
+	name := parts[len(parts)-1]
+	switch {
+	case len(parts) == 3 && name == "_galaxy.md":
+	case len(parts) == 4 && (name == "_cluster.md" || !strings.HasPrefix(name, "_")):
+	default:
+		return "not a subject path: use galaxies/<theme>/<sub-theme>/<subject>.md (or _galaxy.md, _cluster.md)"
+	}
+	return ""
+}
+
 // checkProposal loads the proposal's tree the way the app will after the merge, so an agent learns
 // about a broken file now rather than the user after merging. It also holds ADR-0003: a proposal
-// never lowers a level.
-func (s *Service) checkProposal(dir string, paths []string) error {
+// never lowers a level, and an unattended triage (slug triage-*) never raises one either: only
+// the user decides that they know something better.
+func (s *Service) checkProposal(slug, dir string, paths []string) error {
 	proposed := map[string]bool{}
+	var msgs []string
 	for _, p := range paths {
 		proposed[p] = true
+		if msg := subjectPathProblem(p); msg != "" {
+			msgs = append(msgs, p+": "+msg)
+		}
 	}
 	next, problems, err := kb.Load(dir)
 	if err != nil {
 		return fmt.Errorf("propose: load proposal: %w", err)
 	}
-	var msgs []string
 	for _, p := range problems {
 		if proposed[p.Path] {
 			msgs = append(msgs, p.Path+": "+p.Message)
@@ -316,8 +338,16 @@ func (s *Service) checkProposal(dir string, paths []string) error {
 		if !proposed[filepath.ToSlash(rel)] {
 			continue
 		}
-		if old := cur.Star(st.ID); old != nil && st.Level < old.Level {
+		old := cur.Star(st.ID)
+		if old != nil && st.Level < old.Level {
 			msgs = append(msgs, fmt.Sprintf("%s: level %d is below the current %d; levels never drop through a proposal (ADR-0003), keep %d", filepath.ToSlash(rel), st.Level, old.Level, old.Level))
+		}
+		was := 0
+		if old != nil {
+			was = old.Level
+		}
+		if strings.HasPrefix(slug, "triage-") && st.Level > was {
+			msgs = append(msgs, fmt.Sprintf("%s: a triage cannot raise a level (%d to %d); keep %d and let the user decide", filepath.ToSlash(rel), was, st.Level, was))
 		}
 	}
 	if len(msgs) > 0 {

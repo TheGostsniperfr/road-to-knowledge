@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -443,6 +444,16 @@ type InboxItem struct {
 	Captured string `json:"captured"`
 }
 
+func inboxKey(name string) (string, int) {
+	base := strings.TrimSuffix(name, ".md")
+	if i := strings.LastIndex(base, "-"); i > 0 {
+		if n, err := strconv.Atoi(base[i+1:]); err == nil && len(base[i+1:]) < 4 {
+			return base[:i], n
+		}
+	}
+	return base, 1
+}
+
 // Inbox lists captured notes, newest first, waiting for triage.
 func (s *Service) Inbox() ([]InboxItem, error) {
 	dir := filepath.Join(s.root, "inbox")
@@ -450,6 +461,15 @@ func (s *Service) Inbox() ([]InboxItem, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("inbox: %w", err)
 	}
+	// "…150405-2.md" sorts before "…150405.md" by name; order by stamp, then by suffix.
+	sort.SliceStable(entries, func(i, j int) bool {
+		si, ni := inboxKey(entries[i].Name())
+		sj, nj := inboxKey(entries[j].Name())
+		if si != sj {
+			return si < sj
+		}
+		return ni < nj
+	})
 	out := []InboxItem{}
 	for i := len(entries) - 1; i >= 0; i-- {
 		e := entries[i]
