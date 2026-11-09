@@ -20,6 +20,9 @@ web/ (Vite, TypeScript, Preact)
    src/sky/particles.ts  galaxy and cluster particles, physics-inspired
    src/sky/gl.ts         WebGL2: nebula shader, particles, slot texture
    src/sky/engine.ts     camera (van Wijk zoom), overlay of knowledge stars, input
+   src/atlas/pack.ts     atlas view: circle packing of themes, sub-themes, subjects
+   src/atlas/atlas.ts    atlas renderer (Canvas2D), same surface as the sky engine
+   src/ui/prefs.ts       per-device view and theme choice
    src/ui/*              panels, fiche, AI preview, review drawer
 ```
 
