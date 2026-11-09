@@ -38,6 +38,9 @@ const usage = `rtk: Road to Knowledge
   rtk init     DIR                                    create an empty knowledge folder
   rtk book add [--data DIR] [--title T] FILE          put a PDF in the git-ignored library, print its source block
   rtk anki     export|import|push ...                 exchange cards with Anki, see rtk anki
+  rtk mv       [--dry-run] [--name N] OLD NEW         move or rename a subject or sub-theme
+  rtk split    [--dry-run] ID --into NEW:Notion,...   move notions to new subjects
+  rtk merge    [--dry-run] A B [...] [--into C]       fold subjects together, highest level kept
 
 DIR defaults to $RTK_DATA.
 `
@@ -71,6 +74,8 @@ func main() {
 		err = modelsCmd(ctx, os.Args[2:])
 	case "bench":
 		err = benchCmd(ctx, os.Args[2:])
+	case "mv", "split", "merge":
+		err = restructureCmd(ctx, log, os.Args[1], os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 	default:
