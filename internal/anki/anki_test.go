@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -58,7 +59,7 @@ func exportFile(t *testing.T, notes []anki.Note) string {
 
 func TestExport_RoundTripKeepsQuestionsAnswersAndGUIDs(t *testing.T) {
 	u := universe(t)
-	notes, err := anki.Collect(u, "")
+	notes, _, err := anki.Collect(u, "")
 	require.NoError(t, err)
 
 	col, err := anki.Read(context.Background(), exportFile(t, notes))
@@ -81,7 +82,7 @@ func TestExport_RoundTripKeepsQuestionsAnswersAndGUIDs(t *testing.T) {
 func TestExport_GivesTheSameGUIDsEveryTime(t *testing.T) {
 	u := universe(t)
 	guids := func() []string {
-		notes, err := anki.Collect(u, "langues")
+		notes, _, err := anki.Collect(u, "langues")
 		require.NoError(t, err)
 		col, err := anki.Read(context.Background(), exportFile(t, notes))
 		require.NoError(t, err)
@@ -111,18 +112,18 @@ func TestCollect_LimitsToTheScopeAndNestsDecks(t *testing.T) {
 	u := universe(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			notes, err := anki.Collect(u, tt.scope)
+			notes, _, err := anki.Collect(u, tt.scope)
 
 			require.NoError(t, err)
 			assert.Len(t, notes, tt.want)
 		})
 	}
-	notes, _ := anki.Collect(u, "langues")
+	notes, _, _ := anki.Collect(u, "langues")
 	assert.Equal(t, "RtK::Langues::Japonais", notes[0].Deck)
 }
 
 func TestCollect_RejectsAnUnknownScope(t *testing.T) {
-	_, err := anki.Collect(universe(t), "nope")
+	_, _, err := anki.Collect(universe(t), "nope")
 
 	assert.ErrorIs(t, err, anki.ErrScope)
 }
@@ -183,7 +184,7 @@ func TestPlan_ConvertsHTMLClozeAndMediaIntoAnInboxFile(t *testing.T) {
 	col, err := anki.Read(context.Background(), legacyApkg(t))
 	require.NoError(t, err)
 
-	files, st := anki.Plan(universe(t), col, false, now)
+	files, st := anki.Plan(universe(t), col, nil, false, now)
 
 	require.Len(t, files, 3)
 	inbox := files[0]
@@ -199,12 +200,12 @@ func TestPlan_ConvertsHTMLClozeAndMediaIntoAnInboxFile(t *testing.T) {
 
 func TestPlan_SkipsCardsTheRepoAlreadyHas(t *testing.T) {
 	u := universe(t)
-	notes, err := anki.Collect(u, "")
+	notes, _, err := anki.Collect(u, "")
 	require.NoError(t, err)
 	col, err := anki.Read(context.Background(), exportFile(t, notes))
 	require.NoError(t, err)
 
-	files, st := anki.Plan(u, col, true, now)
+	files, st := anki.Plan(u, col, nil, true, now)
 
 	assert.Empty(t, files)
 	assert.Equal(t, 3, st.Known)
@@ -212,14 +213,14 @@ func TestPlan_SkipsCardsTheRepoAlreadyHas(t *testing.T) {
 
 func TestPlan_ReturnsNewCardsOfAnExportedSubjectToTheirFile_WhenProposing(t *testing.T) {
 	u := universe(t)
-	notes, err := anki.Collect(u, "tech/k8s/cilium")
+	notes, _, err := anki.Collect(u, "tech/k8s/cilium")
 	require.NoError(t, err)
 	notes[0].CardID = "tech/k8s/cilium:deadbeef"
 	notes[0].Front = "Quel mode remplace iptables ?"
 	col, err := anki.Read(context.Background(), exportFile(t, notes))
 	require.NoError(t, err)
 
-	files, st := anki.Plan(u, col, true, now)
+	files, st := anki.Plan(u, col, nil, true, now)
 
 	require.Len(t, files, 1)
 	assert.Equal(t, "galaxies/tech/k8s/cilium.md", files[0].Path)
@@ -234,6 +235,8 @@ func TestText_FlattensFieldsIntoOneSafeLine(t *testing.T) {
 		{"entities", "R&amp;D&nbsp;&lt;3", "R&D <3"},
 		{"separator", "x :: y", "x : y"},
 		{"nested tags", "<span style='x'><b>gras</b></span>", "gras"},
+		{"script and style bodies", "a<script>alert(1)</script><style>p{}</style>b", "a b"},
+		{"escaped tags never come out as tags", "&lt;img src=x onerror=alert(1)&gt;ok", "ok"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -242,6 +245,87 @@ func TestText_FlattensFieldsIntoOneSafeLine(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestCollect_KeepsTheFirstCard_WhenAQuestionRepeatsInASubject(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "galaxies/lang/jp/keigo.md", "---\nname: Keigo\n---\nです :: copule polie\n- です :: copule\n")
+	u, _, err := kb.Load(root)
+	require.NoError(t, err)
+
+	notes, dups, err := anki.Collect(u, "")
+
+	require.NoError(t, err)
+	require.Len(t, notes, 1)
+	assert.Equal(t, "copule polie", notes[0].Back)
+	assert.Len(t, dups, 1)
+	assert.NotEmpty(t, exportFile(t, notes))
+}
+
+func TestPlan_AppendsToTheInboxFileAndSkipsQuestionsAlreadyThere(t *testing.T) {
+	col, err := anki.Read(context.Background(), legacyApkg(t))
+	require.NoError(t, err)
+	prev := "---\nsource: anki\n---\nDéjà là.\n\n- 猫 (neko) :: chat / animal\n"
+
+	files, st := anki.Plan(universe(t), col, map[string]string{"inbox/anki-japonais-vocabulaire.md": prev}, false, now)
+
+	require.NotEmpty(t, files)
+	assert.Equal(t, 1, st.Known)
+	assert.True(t, strings.HasPrefix(files[0].Content, prev))
+	assert.Equal(t, 1, strings.Count(files[0].Content, "---\nsource"))
+	assert.Equal(t, 1, strings.Count(files[0].Content, "猫"))
+	assert.Contains(t, files[0].Content, "- Tokyo est la […] du Japon :: capitale\n")
+}
+
+func TestRead_LoadsOnlyTheMediaTheNotesUse(t *testing.T) {
+	col, err := anki.Read(context.Background(), legacyApkg(t))
+
+	require.NoError(t, err)
+	assert.Contains(t, col.Media, "cat.png")
+	assert.NotContains(t, col.Media, "evil.svg")
+}
+
+func TestRead_RefusesAPackageWithTooManyEntries(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "many.apkg")
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for i := 0; i <= anki.MaxEntries; i++ {
+		_, err := zw.CreateHeader(&zip.FileHeader{Name: strconv.Itoa(i), Method: zip.Store})
+		require.NoError(t, err)
+	}
+	require.NoError(t, zw.Close())
+	require.NoError(t, os.WriteFile(path, buf.Bytes(), 0o644))
+
+	_, err := anki.Read(context.Background(), path)
+
+	assert.ErrorIs(t, err, anki.ErrTooLarge)
+}
+
+func TestPlan_EscapesBracketsInMediaLinks(t *testing.T) {
+	col := &anki.Collection{
+		Notes: []anki.RawNote{{Deck: "Sons", Fields: []string{"écoute [sound:a(b).mp3]", "réponse"}}},
+		Media: map[string][]byte{"a(b).mp3": []byte("ID3")},
+	}
+
+	files, _ := anki.Plan(universe(t), col, nil, false, now)
+
+	require.NotEmpty(t, files)
+	assert.Regexp(t, `\n  \[a\\\(b\\\)\.mp3\]\(assets/anki/[0-9a-f]{8}-a_b_\.mp3\)\n`, files[0].Content)
+}
+
+func TestConnect_DoesNotFollowRedirects(t *testing.T) {
+	hit := false
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hit = true }))
+	defer elsewhere.Close()
+	redirect := httptest.NewServer(http.RedirectHandler(elsewhere.URL, http.StatusTemporaryRedirect))
+	defer redirect.Close()
+	c, err := anki.NewConnect(redirect.URL)
+	require.NoError(t, err)
+
+	_, err = c.Push(context.Background(), nil)
+
+	assert.Error(t, err)
+	assert.False(t, hit)
 }
 
 // modernApkg builds an Anki 2.1.50+ package: zstd collection with schema 18 tables, zstd media
@@ -295,7 +379,7 @@ func TestPlan_ImportsAPackageWrittenByAnki2509(t *testing.T) {
 	col, err := anki.Read(context.Background(), "testdata/anki-25.09.apkg")
 	require.NoError(t, err)
 
-	files, st := anki.Plan(universe(t), col, false, now)
+	files, st := anki.Plan(universe(t), col, nil, false, now)
 
 	require.Len(t, files, 2)
 	assert.Equal(t, "inbox/anki-cuisine-pâtisserie.md", files[0].Path)
@@ -415,7 +499,7 @@ func (f *fakeAnki) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestPush_AddsNewNotesUpdatesChangedOnesAndLeavesTheRest(t *testing.T) {
-	notes, err := anki.Collect(universe(t), "langues")
+	notes, _, err := anki.Collect(universe(t), "langues")
 	require.NoError(t, err)
 	fake := &fakeAnki{notes: map[int64]map[string]string{
 		1: {"Front": "あ", "Back": "a", "Subject": notes[0].Subject, "RtkID": notes[0].CardID},
@@ -424,7 +508,7 @@ func TestPush_AddsNewNotesUpdatesChangedOnesAndLeavesTheRest(t *testing.T) {
 	srv := httptest.NewServer(fake)
 	defer srv.Close()
 	srv.URL = strings.Replace(srv.URL, "127.0.0.1", "localhost", 1)
-	cilium, _ := anki.Collect(universe(t), "tech")
+	cilium, _, _ := anki.Collect(universe(t), "tech")
 	c, err := anki.NewConnect(srv.URL)
 	require.NoError(t, err)
 

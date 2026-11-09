@@ -39,13 +39,19 @@ var (
 	space     = regexp.MustCompile(`[ \t\x{a0}]+`)
 	clozeMark = regexp.MustCompile(`(?s)\{\{c(\d+)::(.*?)(?:::(.*?))?\}\}`)
 	unsafe    = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
+	script    = regexp.MustCompile(`(?is)<script\b.*?</script\s*>`)
+	style     = regexp.MustCompile(`(?is)<style\b.*?</style\s*>`)
+	cardLine  = regexp.MustCompile(`^\s*(?:[-*]\s+)?(.+?)\s+::\s+(.+?)\s*$`)
+	linkText  = strings.NewReplacer(`[`, `\[`, `]`, `\]`, `(`, `\(`, `)`, `\)`)
 )
 
 // Text turns an Anki field into one line of plain text. Images and sounds are returned apart:
 // a card line is shown escaped in the app, so they go on their own line below it.
 func Text(field string) (string, []string, int) {
 	var media []string
-	s := imgTag.ReplaceAllStringFunc(field, func(m string) string {
+	s := script.ReplaceAllString(field, " ")
+	s = style.ReplaceAllString(s, " ")
+	s = imgTag.ReplaceAllStringFunc(s, func(m string) string {
 		sub := imgTag.FindStringSubmatch(m)
 		for _, src := range sub[2:] {
 			if src != "" {
@@ -62,8 +68,9 @@ func Text(field string) (string, []string, int) {
 		return " "
 	})
 	s = blockTag.ReplaceAllString(s, "\n")
-	s = anyTag.ReplaceAllString(s, "")
+	// Entities are decoded before tags are stripped, so "&lt;script&gt;" cannot come out as a tag.
 	s = html.UnescapeString(s)
+	s = anyTag.ReplaceAllString(s, "")
 	var parts []string
 	for _, line := range strings.Split(s, "\n") {
 		if line = strings.TrimSpace(space.ReplaceAllString(line, " ")); line != "" {
@@ -151,16 +158,24 @@ func clozeCards(n RawNote, st *Stats) []Card {
 	return out
 }
 
-// Plan turns a collection into file changes. Cards the repo already has are skipped. With
-// toSubjects, cards exported from the repo go back into their subject file (for a proposal
-// branch); every other card goes to inbox/anki-<deck>.md for triage.
-func Plan(u *kb.Universe, col *Collection, toSubjects bool, now time.Time) ([]gitx.FileChange, Stats) {
+// Plan turns a collection into file changes. Cards the repo or the inbox already has are
+// skipped. inbox maps inbox/*.md paths to their content: an existing inbox/anki-<deck>.md is
+// appended to, never rewritten. With toSubjects, cards exported from the repo go back into
+// their subject file (for a proposal branch); every other card goes to inbox/anki-<deck>.md.
+func Plan(u *kb.Universe, col *Collection, inbox map[string]string, toSubjects bool, now time.Time) ([]gitx.FileChange, Stats) {
 	var st Stats
 	known := map[string]bool{}
 	questions := map[string]bool{}
 	for _, c := range u.Cards() {
 		known[c.ID] = true
 		questions[norm(c.Question)] = true
+	}
+	for _, content := range inbox {
+		for _, line := range strings.Split(content, "\n") {
+			if m := cardLine.FindStringSubmatch(line); m != nil {
+				questions[norm(m[1])] = true
+			}
+		}
 	}
 	mediaPath := map[string]string{}
 	var assets []gitx.FileChange
@@ -190,7 +205,7 @@ func Plan(u *kb.Universe, col *Collection, toSubjects bool, now time.Time) ([]gi
 				if isImage(p) {
 					fmt.Fprintf(&b, "  ![](%s)\n", p)
 				} else {
-					fmt.Fprintf(&b, "  [%s](%s)\n", filepath.Base(m), p)
+					fmt.Fprintf(&b, "  [%s](%s)\n", linkText.Replace(filepath.Base(m)), p)
 				}
 			}
 		}
@@ -198,7 +213,8 @@ func Plan(u *kb.Universe, col *Collection, toSubjects bool, now time.Time) ([]gi
 	}
 
 	bySubject := map[string][]string{}
-	byDeck := map[string][]string{}
+	byPath := map[string][]string{}
+	deckOf := map[string]string{}
 	for _, n := range col.Notes {
 		st.Notes++
 		for _, c := range Cards(n, &st) {
@@ -217,7 +233,11 @@ func Plan(u *kb.Universe, col *Collection, toSubjects bool, now time.Time) ([]gi
 			if deck == "" {
 				deck = "Anki"
 			}
-			byDeck[deck] = append(byDeck[deck], line(c))
+			path := "inbox/anki-" + slug(deck) + ".md"
+			if _, ok := deckOf[path]; !ok {
+				deckOf[path] = deck
+			}
+			byPath[path] = append(byPath[path], line(c))
 			st.ToInbox++
 		}
 	}
@@ -229,12 +249,17 @@ func Plan(u *kb.Universe, col *Collection, toSubjects bool, now time.Time) ([]gi
 		body, _ := os.ReadFile(s.Path)
 		files = append(files, gitx.FileChange{Path: filepath.ToSlash(rel), Content: strings.TrimRight(string(body), "\n") + "\n\n" + strings.Join(bySubject[id], "")})
 	}
-	for _, deck := range sortedKeys(byDeck) {
+	for _, path := range sortedKeys(byPath) {
+		deck := deckOf[path]
 		var b strings.Builder
-		fmt.Fprintf(&b, "---\ncaptured: %s\nsource: anki\ndeck: %q\n---\n", now.Format(time.RFC3339), deck)
-		fmt.Fprintf(&b, "Cartes importées du deck Anki « %s ». Range-les dans les sujets qui leur correspondent.\n\n", deck)
-		b.WriteString(strings.Join(byDeck[deck], ""))
-		files = append(files, gitx.FileChange{Path: "inbox/anki-" + slug(deck) + ".md", Content: b.String()})
+		if prev, ok := inbox[path]; ok {
+			b.WriteString(strings.TrimRight(prev, "\n") + "\n")
+		} else {
+			fmt.Fprintf(&b, "---\ncaptured: %s\nsource: anki\ndeck: %q\n---\n", now.Format(time.RFC3339), deck)
+			fmt.Fprintf(&b, "Cartes importées du deck Anki « %s ». Range-les dans les sujets qui leur correspondent.\n\n", deck)
+		}
+		b.WriteString(strings.Join(byPath[path], ""))
+		files = append(files, gitx.FileChange{Path: path, Content: b.String()})
 	}
 	return append(files, assets...), st
 }

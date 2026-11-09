@@ -46,8 +46,20 @@ var ErrNotAnki = errors.New("not an Anki package")
 
 var zstdMagic = []byte{0x28, 0xb5, 0x2f, 0xfd}
 
-// maxEntry bounds what one zip entry may expand to, so a crafted package cannot fill the disk or memory.
-const maxEntry = 512 << 20
+// Limits on what a package may expand to, so a crafted file cannot fill the disk or memory.
+const (
+	maxEntry   = 512 << 20
+	MaxTotal   = 1 << 30
+	MaxEntries = 100_000
+)
+
+var ErrTooLarge = errors.New("Anki package too large")
+
+// pkg reads zip entries against one budget for the whole package.
+type pkg struct {
+	files map[string]*zip.File
+	left  int64
+}
 
 // Read opens an .apkg. It prefers collection.anki21b (Anki 2.1.50+, zstd, schema 18), then
 // collection.anki21, then collection.anki2, because newer exports put a stub in the old file.
@@ -57,10 +69,14 @@ func Read(ctx context.Context, path string) (*Collection, error) {
 		return nil, fmt.Errorf("%w: %w", ErrNotAnki, err)
 	}
 	defer zr.Close()
+	if len(zr.File) > MaxEntries {
+		return nil, fmt.Errorf("%w: %d entries, at most %d", ErrTooLarge, len(zr.File), MaxEntries)
+	}
 	files := map[string]*zip.File{}
 	for _, f := range zr.File {
 		files[f.Name] = f
 	}
+	p := &pkg{files: files, left: MaxTotal}
 	var colFile *zip.File
 	for _, name := range []string{"collection.anki21b", "collection.anki21", "collection.anki2"} {
 		if f := files[name]; f != nil {
@@ -71,7 +87,7 @@ func Read(ctx context.Context, path string) (*Collection, error) {
 	if colFile == nil {
 		return nil, fmt.Errorf("%w: no collection inside", ErrNotAnki)
 	}
-	raw, err := readEntry(colFile)
+	raw, err := p.read(colFile)
 	if err != nil {
 		return nil, err
 	}
@@ -88,34 +104,43 @@ func Read(ctx context.Context, path string) (*Collection, error) {
 	if err != nil {
 		return nil, err
 	}
-	media, err := readMedia(files)
+	media, err := p.media(referenced(notes))
 	if err != nil {
 		return nil, err
 	}
 	return &Collection{Notes: notes, Media: media}, nil
 }
 
-func readEntry(f *zip.File) ([]byte, error) {
+func (p *pkg) read(f *zip.File) ([]byte, error) {
+	limit := min(int64(maxEntry), p.left)
 	rc, err := f.Open()
 	if err != nil {
 		return nil, fmt.Errorf("anki read %s: %w", f.Name, err)
 	}
 	defer rc.Close()
-	data, err := io.ReadAll(io.LimitReader(rc, maxEntry+1))
+	data, err := io.ReadAll(io.LimitReader(rc, limit+1))
 	if err != nil {
 		return nil, fmt.Errorf("anki read %s: %w", f.Name, err)
 	}
-	if len(data) > maxEntry {
-		return nil, fmt.Errorf("anki read %s: entry larger than %d bytes", f.Name, maxEntry)
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("%w: %s expands past the limit", ErrTooLarge, f.Name)
 	}
-	return unzstd(f.Name, data)
+	out, err := unzstd(f.Name, data, uint64(limit))
+	if err != nil {
+		return nil, err
+	}
+	p.left -= int64(len(out))
+	if p.left < 0 {
+		return nil, fmt.Errorf("%w: more than %d bytes in total", ErrTooLarge, MaxTotal)
+	}
+	return out, nil
 }
 
-func unzstd(name string, data []byte) ([]byte, error) {
+func unzstd(name string, data []byte, limit uint64) ([]byte, error) {
 	if !bytes.HasPrefix(data, zstdMagic) {
 		return data, nil
 	}
-	dec, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(maxEntry))
+	dec, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(limit))
 	if err != nil {
 		return nil, fmt.Errorf("anki read %s: %w", name, err)
 	}
@@ -284,15 +309,16 @@ func modernMeta(ctx context.Context, db *sql.DB) (map[int64]model, map[int64]str
 	return models, decks, rows.Err()
 }
 
-// readMedia maps media names to bytes. The index is JSON {"0": "a.png"} in old packages and a
+// media loads the files the notes refer to, and only those: a shared deck often carries
+// thousands of sounds nobody imports. The index is JSON {"0": "a.png"} in old packages and a
 // zstd protobuf list in anki21b ones, where entry i lives in the zip under its position.
-func readMedia(files map[string]*zip.File) (map[string][]byte, error) {
+func (p *pkg) media(want map[string]bool) (map[string][]byte, error) {
 	out := map[string][]byte{}
-	idx := files["media"]
-	if idx == nil {
+	idx := p.files["media"]
+	if idx == nil || len(want) == 0 {
 		return out, nil
 	}
-	data, err := readEntry(idx)
+	data, err := p.read(idx)
 	if err != nil {
 		return nil, err
 	}
@@ -315,11 +341,11 @@ func readMedia(files map[string]*zip.File) (map[string][]byte, error) {
 		}
 	}
 	for key, name := range names {
-		f := files[key]
-		if f == nil || name == "" {
+		f := p.files[key]
+		if f == nil || !want[name] {
 			continue
 		}
-		b, err := readEntry(f)
+		b, err := p.read(f)
 		if err != nil {
 			return nil, err
 		}
@@ -415,4 +441,18 @@ func uvarint(b []byte) (uint64, int) {
 		}
 	}
 	return 0, 0
+}
+
+// referenced lists the media names the notes use in <img src> or [sound:].
+func referenced(notes []RawNote) map[string]bool {
+	out := map[string]bool{}
+	for _, n := range notes {
+		for _, f := range n.Fields {
+			_, media, _ := Text(f)
+			for _, m := range media {
+				out[m] = true
+			}
+		}
+	}
+	return out
 }
