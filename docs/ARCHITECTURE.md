@@ -12,6 +12,7 @@ internal/library   git-ignored library/ of book originals, named by content hash
 internal/review    FSRS, append-only log replayed in time order
 internal/gitx      commits from the app; proposals/* branches through a temporary worktree
 internal/news      RSS/Atom fetcher, cache in .rtk/news (never committed), subject matching
+internal/anki      .apkg export and import, AnkiConnect push (ADR-0011)
         ▼
 internal/app       Service: the loaded universe and the views shared by API and MCP
    ├── internal/httpapi    JSON API, SSE reload events, /assets, /mcp, embedded web app

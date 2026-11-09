@@ -86,6 +86,7 @@ First paragraph: the summary shown in lists and given to agents.
 ```
 
 Images: `![](assets/kana.png)` from any fiche; the server exposes `assets/` read-only.
+`assets/anki/` holds the images and sounds of imported Anki decks.
 Diagrams: fenced `mermaid` blocks are rendered in the fiche.
 
 ## `source:` (books and long documents)
