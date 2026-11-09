@@ -140,6 +140,25 @@ type FileChange struct {
 	// Delete removes the file instead of writing it. Only inbox notes can be deleted, so a triage
 	// proposal can clear the notes it placed; subjects are never removed by an agent.
 	Delete bool
+	// Data carries a binary asset instead of Content. Only trusted callers (the Anki import)
+	// build it: MCP tools never fill it, so agents still write Markdown only.
+	Data []byte
+}
+
+var ErrBadAsset = errors.New("asset must be an image or audio file under assets/anki/")
+
+var assetExt = map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true, ".mp3": true, ".ogg": true, ".wav": true, ".m4a": true}
+
+// ValidAssetPath keeps binary writes inside assets/anki/ and refuses formats a browser would run (svg, html).
+func ValidAssetPath(p string) (string, error) {
+	clean := filepath.ToSlash(filepath.Clean(p))
+	if filepath.IsAbs(p) || strings.Contains("/"+clean+"/", "/../") || !strings.HasPrefix(clean, "assets/anki/") {
+		return "", ErrBadAsset
+	}
+	if !assetExt[strings.ToLower(filepath.Ext(clean))] {
+		return "", ErrBadAsset
+	}
+	return clean, nil
 }
 
 var ErrBadDelete = errors.New("only inbox/ notes can be deleted by a proposal")
@@ -156,7 +175,11 @@ func (r *Repo) Propose(ctx context.Context, slug, message string, files []FileCh
 		return "", fmt.Errorf("propose: invalid branch name %q: use lowercase words joined by dashes, e.g. fiche-kana", branch)
 	}
 	for i, f := range files {
-		clean, err := ValidProposalPath(f.Path)
+		valid := ValidProposalPath
+		if f.Data != nil {
+			valid = ValidAssetPath
+		}
+		clean, err := valid(f.Path)
 		if err != nil {
 			return "", fmt.Errorf("propose %s: %w", f.Path, err)
 		}
@@ -210,7 +233,11 @@ func (r *Repo) Propose(ctx context.Context, slug, message string, files []FileCh
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			return "", fmt.Errorf("propose: %w", err)
 		}
-		if err := os.WriteFile(full, []byte(f.Content), 0o644); err != nil {
+		data := f.Data
+		if data == nil {
+			data = []byte(f.Content)
+		}
+		if err := os.WriteFile(full, data, 0o644); err != nil {
 			return "", fmt.Errorf("propose: %w", err)
 		}
 		rel = append(rel, f.Path)

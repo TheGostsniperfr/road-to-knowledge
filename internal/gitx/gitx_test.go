@@ -117,3 +117,39 @@ func TestValidProposalPath_RejectsEscapes(t *testing.T) {
 		})
 	}
 }
+
+func TestValidAssetPath_RejectsEscapesAndActiveFormats(t *testing.T) {
+	tests := []struct{ name, path string }{
+		{"outside assets/anki", "assets/x.png"},
+		{"traversal", "assets/anki/../../galaxies/x.png"},
+		{"absolute", "/tmp/assets/anki/x.png"},
+		{"svg can run script", "assets/anki/x.svg"},
+		{"html", "assets/anki/x.html"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := gitx.ValidAssetPath(tt.path)
+			assert.ErrorIs(t, err, gitx.ErrBadAsset)
+		})
+	}
+}
+
+func TestPropose_WritesBinaryAssetOnBranch(t *testing.T) {
+	dir := gitRepo(t)
+	r := gitx.Open(context.Background(), dir)
+	png := []byte{0x89, 'P', 'N', 'G', 0, 1, 2}
+
+	branch, err := r.Propose(context.Background(), "anki-import", "feat: import", []gitx.FileChange{{Path: "assets/anki/a.png", Data: png}})
+
+	require.NoError(t, err)
+	assert.Equal(t, string(png), git(t, dir, "show", branch+":assets/anki/a.png"))
+}
+
+func TestPropose_RefusesMarkdownOutsideAssets_WhenGivenBinaryData(t *testing.T) {
+	dir := gitRepo(t)
+	r := gitx.Open(context.Background(), dir)
+
+	_, err := r.Propose(context.Background(), "x", "x", []gitx.FileChange{{Path: "galaxies/a/b.md", Data: []byte("x")}})
+
+	assert.ErrorIs(t, err, gitx.ErrBadAsset)
+}
