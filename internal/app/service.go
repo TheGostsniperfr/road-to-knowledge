@@ -50,6 +50,8 @@ type Service struct {
 	newsStore *news.Store
 	newsErr   error
 	newsMu    sync.Mutex
+
+	sem semanticState
 }
 
 func New(ctx context.Context, root string, log *slog.Logger) (*Service, error) {
@@ -97,6 +99,7 @@ func (s *Service) Reload(ctx context.Context) error {
 	for _, p := range problems {
 		s.log.Warn("knowledge problem", "path", p.Path, "msg", p.Message)
 	}
+	s.reindex()
 	s.notify(v)
 	return nil
 }

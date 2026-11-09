@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TheGostsniperfr/road-to-knowledge/internal/index"
 	"github.com/TheGostsniperfr/road-to-knowledge/internal/kb"
 	"github.com/TheGostsniperfr/road-to-knowledge/internal/review"
 )
@@ -337,18 +336,6 @@ func (s *Service) Fragments(id, section string) (string, error) {
 		names[i] = p.Name
 	}
 	return "", fmt.Errorf("section %q in %q: %w; sections: %s", section, id, ErrNotFound, strings.Join(names, ", "))
-}
-
-func (s *Service) Search(ctx context.Context, q string, limit int) ([]index.Hit, error) {
-	_, idx, _, _ := s.snapshot()
-	if limit <= 0 || limit > 50 {
-		limit = 10
-	}
-	hits, err := idx.Search(ctx, q, limit)
-	if hits == nil {
-		hits = []index.Hit{}
-	}
-	return hits, err
 }
 
 // --- review ---
