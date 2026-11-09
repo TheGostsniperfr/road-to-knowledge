@@ -72,8 +72,12 @@ func Load(root string) (*Universe, []Problem, error) {
 			if gm.ReviewAfter > 0 {
 				g.ReviewAfter = gm.ReviewAfter
 			}
-			if gm.Discovery != nil {
-				g.Discovery = *gm.Discovery
+			if d := gm.Discovery; d != nil {
+				if d.Near < 0 || d.TwoHops < 0 || d.OffPiste < 0 {
+					report(g.Path, "discovery percentages cannot be negative, keeping the defaults")
+				} else {
+					g.Discovery = *d
+				}
 			}
 		}
 		u.galaxies[gid] = g
