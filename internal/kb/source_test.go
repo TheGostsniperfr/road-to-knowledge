@@ -26,6 +26,8 @@ func TestSourceProblems(t *testing.T) {
 		{"refuses a file outside the library", kb.Source{Title: "T", File: "galaxies/x.md"}, "library/"},
 		{"refuses a path that climbs out", kb.Source{Title: "T", File: "library/../secret.pdf"}, "library/"},
 		{"refuses an absolute path", kb.Source{Title: "T", File: "/etc/passwd"}, "library/"},
+		{"accepts two dots inside a file name", kb.Source{Title: "T", File: "library/vol..2.pdf"}, ""},
+		{"refuses the library folder itself", kb.Source{Title: "T", File: "library/"}, "library/"},
 		{"refuses a short hash", kb.Source{Title: "T", SHA256: "abc"}, "sha256"},
 		{"refuses negative pages", kb.Source{Title: "T", Pages: -1}, "negative"},
 	}

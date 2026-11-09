@@ -62,6 +62,24 @@ func TestAdd_IgnoresTheLibraryInGitOnce(t *testing.T) {
 	assert.Equal(t, ".rtk/\nlibrary/\n", string(b))
 }
 
+func TestAdd_KeepsGitignoreUntouched_WhenTheLibraryIsAlreadyIgnored(t *testing.T) {
+	t.Parallel()
+	for _, rule := range []string{"library", "library/", "/library/", "library/*", "/library/*"} {
+		t.Run(rule, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			want := ".rtk/\n" + rule + "\n"
+			require.NoError(t, os.WriteFile(filepath.Join(root, ".gitignore"), []byte(want), 0o644))
+
+			_, err := library.Add(root, writeBook(t, "a.pdf", "a"))
+
+			require.NoError(t, err)
+			got, _ := os.ReadFile(filepath.Join(root, ".gitignore"))
+			assert.Equal(t, want, string(got))
+		})
+	}
+}
+
 func TestAdd_RefusesFilesThatAreNotDocuments(t *testing.T) {
 	t.Parallel()
 

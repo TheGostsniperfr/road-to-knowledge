@@ -102,7 +102,8 @@ func ensureIgnored(root string) error {
 	if f, err := os.Open(p); err == nil {
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {
-			if t := strings.TrimSpace(sc.Text()); t == line || t == "/"+line || t == kb.LibraryDir {
+			t := strings.TrimPrefix(strings.TrimSpace(sc.Text()), "/")
+			if t == kb.LibraryDir || t == line || t == line+"*" || t == line+"**" {
 				f.Close()
 				return nil
 			}
