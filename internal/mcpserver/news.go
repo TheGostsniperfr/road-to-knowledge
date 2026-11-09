@@ -53,6 +53,10 @@ func addNews(s *mcp.Server, svc *app.Service) {
 			for _, it := range v.Items {
 				o := newsOutItem{Title: it.Title, Link: it.Link, Source: it.Source, Theme: it.ScopeName, Published: it.Published.Format("2006-01-02")}
 				for _, m := range it.Subjects {
+					if m.Kind == "cluster" {
+						o.Subjects = append(o.Subjects, m.Name+" (sub-theme, best level "+strconv.Itoa(m.Level)+")")
+						continue
+					}
 					o.Subjects = append(o.Subjects, m.Name+" (level "+strconv.Itoa(m.Level)+")")
 				}
 				if len([]rune(it.Summary)) > 200 {

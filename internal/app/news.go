@@ -153,6 +153,18 @@ func (s *Service) News(q NewsQuery) (NewsView, error) {
 	for _, star := range u.Stars() {
 		subjects = append(subjects, news.Subject{ID: star.ID, Name: star.Name, Level: star.Level, Tags: star.Tags})
 	}
+	// Sub-theme names count too: an article about Kubernetes matters to someone with a
+	// Kubernetes sub-theme even if no subject inside it is called that. Its level is the best
+	// level reached inside it.
+	for _, g := range u.Galaxies {
+		for _, c := range g.Clusters {
+			best := 0
+			for _, st := range c.Stars {
+				best = max(best, st.Level)
+			}
+			subjects = append(subjects, news.Subject{ID: c.ID, Name: c.Name, Level: best, Kind: "cluster"})
+		}
+	}
 	m := news.NewMatcher(subjects)
 
 	out := NewsView{Items: []NewsItem{}, Sources: []NewsSource{}}

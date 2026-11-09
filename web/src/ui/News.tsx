@@ -79,7 +79,7 @@ export function News({ universe, go }: { universe: UniverseView | null; go: (id:
               <small>{it.source} · {ago(it.published)}</small>
               {it.summary && <p>{it.summary}</p>}
               <div class="row">
-                {it.subjects.map((s) => <button key={s.id} class="tagn" onClick={() => go(s.id)}>{s.name} · {s.level}</button>)}
+                {it.subjects.map((s) => <button key={s.id} class="tagn" onClick={() => go(s.id)}>{s.kind === "cluster" ? s.name : `${s.name} · ${s.level}`}</button>)}
                 <button class="chip keep" disabled={kept.has(it.id)} onClick={() => keep(it)}>{kept.has(it.id) ? "Gardé" : "Garder"}</button>
               </div>
             </article>

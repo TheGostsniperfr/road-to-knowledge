@@ -97,7 +97,7 @@ export const api = {
   ai: (tool: "profile" | "subgraph" | "node", id = "") => req<AIPreview>("GET", `/api/ai?tool=${tool}&id=${encodeURIComponent(id)}`),
 };
 
-export interface NewsMatch { id: string; name: string; level: number }
+export interface NewsMatch { id: string; name: string; level: number; kind?: "cluster" }
 
 export interface NewsItem { id: string; title: string; link: string; summary?: string; source: string; scope: string; scope_name: string; galaxy: string; published: string; subjects: NewsMatch[] }
 

@@ -12,12 +12,15 @@ type Subject struct {
 	Name  string
 	Level int
 	Tags  []string
+	// Kind is "cluster" for a sub-theme name; empty for a subject.
+	Kind string
 }
 
 type Match struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Level int    `json:"level"`
+	Kind  string `json:"kind,omitempty"`
 }
 
 type Matcher struct {
@@ -72,7 +75,7 @@ func (m *Matcher) Match(text string) []Match {
 	out := make([]Match, 0, len(hit))
 	for i := range hit {
 		s := m.subjects[i]
-		out = append(out, Match{ID: s.ID, Name: s.Name, Level: s.Level})
+		out = append(out, Match{ID: s.ID, Name: s.Name, Level: s.Level, Kind: s.Kind})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Level != out[j].Level {
