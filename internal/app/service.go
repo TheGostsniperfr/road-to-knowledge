@@ -135,6 +135,7 @@ func (s *Service) Watch(ctx context.Context) error {
 		})
 	}
 	addTree(filepath.Join(s.root, kb.GalaxiesDir))
+	w.Add(s.root)
 	os.MkdirAll(filepath.Dir(s.book.Path()), 0o755)
 	w.Add(filepath.Dir(s.book.Path()))
 	var timer *time.Timer
@@ -149,7 +150,7 @@ func (s *Service) Watch(ctx context.Context) error {
 					addTree(ev.Name)
 				}
 			}
-			if !strings.HasSuffix(ev.Name, ".md") && !strings.HasSuffix(ev.Name, ".jsonl") && ev.Op&(fsnotify.Create|fsnotify.Remove|fsnotify.Rename) == 0 {
+			if !strings.HasSuffix(ev.Name, ".md") && !strings.HasSuffix(ev.Name, ".jsonl") && filepath.Base(ev.Name) != kb.LayoutFile && ev.Op&(fsnotify.Create|fsnotify.Remove|fsnotify.Rename) == 0 {
 				continue
 			}
 			if timer != nil {
@@ -256,4 +257,74 @@ func (s *Service) Propose(ctx context.Context, slug, message string, files []git
 		return "", fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
 	return branch, err
+}
+
+// SetLayout replaces the pinned galaxy positions. Pins for galaxies that no longer exist are refused, not kept.
+func (s *Service) SetLayout(ctx context.Context, pins map[string]kb.Pin) (UniverseView, error) {
+	u, _, _, _ := s.snapshot()
+	for id, p := range pins {
+		if u.Galaxy(id) == nil {
+			return UniverseView{}, fmt.Errorf("galaxy %q: %w", id, ErrNotFound)
+		}
+		if !p.Valid() {
+			return UniverseView{}, fmt.Errorf("pin for %q out of range: %w", id, ErrInvalid)
+		}
+	}
+	path, err := kb.WriteLayout(s.root, kb.Layout{Galaxies: pins})
+	if err != nil {
+		return UniverseView{}, err
+	}
+	s.commit(ctx, "chore(layout): pin galaxies", path)
+	if err := s.Reload(ctx); err != nil {
+		return UniverseView{}, err
+	}
+	return s.Universe(), nil
+}
+
+// GalaxySettings carries the fields of _galaxy.md the app may edit; nil means unchanged.
+type GalaxySettings struct {
+	ReviewAfter *int          `json:"review_after_days"`
+	Discovery   *kb.Discovery `json:"discovery"`
+}
+
+func (s *Service) SetGalaxy(ctx context.Context, id string, in GalaxySettings) (GalaxyView, error) {
+	u, _, _, _ := s.snapshot()
+	g := u.Galaxy(id)
+	if g == nil {
+		return GalaxyView{}, fmt.Errorf("galaxy %q: %w", id, ErrNotFound)
+	}
+	fields := map[string]any{}
+	if in.ReviewAfter != nil {
+		if *in.ReviewAfter < 1 || *in.ReviewAfter > 3650 {
+			return GalaxyView{}, fmt.Errorf("review_after_days %d not in 1..3650: %w", *in.ReviewAfter, ErrInvalid)
+		}
+		fields["review_after_days"] = *in.ReviewAfter
+	}
+	if in.Discovery != nil {
+		if !in.Discovery.Valid() {
+			return GalaxyView{}, fmt.Errorf("discovery shares must sum to 100: %w", ErrInvalid)
+		}
+		fields["discovery"] = *in.Discovery
+	}
+	if len(fields) == 0 {
+		return GalaxyView{}, fmt.Errorf("nothing to change: %w", ErrInvalid)
+	}
+	if _, err := os.Stat(g.Path); os.IsNotExist(err) {
+		if err := os.WriteFile(g.Path, nil, 0o644); err != nil {
+			return GalaxyView{}, fmt.Errorf("set galaxy: %w", err)
+		}
+	}
+	if err := kb.SetFields(g.Path, fields); err != nil {
+		return GalaxyView{}, err
+	}
+	s.commit(ctx, fmt.Sprintf("chore(knowledge): %s settings", g.Name), g.Path)
+	if err := s.Reload(ctx); err != nil {
+		return GalaxyView{}, err
+	}
+	for _, gv := range s.Universe().Galaxies {
+		if gv.ID == id {
+			return gv, nil
+		}
+	}
+	return GalaxyView{}, fmt.Errorf("galaxy %q vanished after write: %w", id, ErrNotFound)
 }

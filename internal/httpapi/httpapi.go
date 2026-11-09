@@ -38,6 +38,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/universe", s.universe)
 	mux.HandleFunc("GET /api/star/{id...}", s.star)
 	mux.HandleFunc("PATCH /api/star/{id...}", s.patchStar)
+	mux.HandleFunc("PATCH /api/galaxy/{id}", s.patchGalaxy)
+	mux.HandleFunc("PUT /api/layout", s.putLayout)
 	mux.HandleFunc("GET /api/search", s.search)
 	mux.HandleFunc("GET /api/review/due", s.due)
 	mux.HandleFunc("GET /api/frontier", s.frontier)
@@ -148,6 +150,34 @@ func (s *Server) patchStar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v, err := s.svc.SetMeta(r.Context(), r.PathValue("id"), in.Level, in.State)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, v)
+}
+
+func (s *Server) patchGalaxy(w http.ResponseWriter, r *http.Request) {
+	var in app.GalaxySettings
+	if err := decode(r, &in); err != nil {
+		s.fail(w, err)
+		return
+	}
+	v, err := s.svc.SetGalaxy(r.Context(), r.PathValue("id"), in)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, v)
+}
+
+func (s *Server) putLayout(w http.ResponseWriter, r *http.Request) {
+	var in kb.Layout
+	if err := decode(r, &in); err != nil {
+		s.fail(w, err)
+		return
+	}
+	v, err := s.svc.SetLayout(r.Context(), in.Galaxies)
 	if err != nil {
 		s.fail(w, err)
 		return

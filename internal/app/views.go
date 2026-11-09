@@ -46,6 +46,7 @@ type GalaxyView struct {
 	Shape       string        `json:"shape"`
 	ReviewAfter int           `json:"review_after_days"`
 	Discovery   kb.Discovery  `json:"discovery"`
+	Pin         *kb.Pin       `json:"pin,omitempty"`
 	Clusters    []ClusterView `json:"clusters"`
 }
 
@@ -123,7 +124,7 @@ func (s *Service) Universe() UniverseView {
 		out.Problems = []kb.Problem{}
 	}
 	for _, g := range u.Galaxies {
-		gv := GalaxyView{ID: g.ID, Name: g.Name, Hue: g.Hue, Shape: g.Shape, ReviewAfter: g.ReviewAfter, Discovery: g.Discovery, Clusters: []ClusterView{}}
+		gv := GalaxyView{ID: g.ID, Name: g.Name, Hue: g.Hue, Shape: g.Shape, ReviewAfter: g.ReviewAfter, Discovery: g.Discovery, Pin: g.Pin, Clusters: []ClusterView{}}
 		for _, c := range g.Clusters {
 			cv := ClusterView{ID: c.ID, Name: c.Name, Stars: []StarSummary{}}
 			for _, st := range c.Stars {
