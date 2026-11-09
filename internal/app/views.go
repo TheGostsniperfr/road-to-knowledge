@@ -314,7 +314,11 @@ func (s *Service) Fragments(id, section string) (string, error) {
 			return "## " + p.Name + "\n" + p.Body, nil
 		}
 	}
-	return "", fmt.Errorf("section %q in %q: %w", section, id, ErrNotFound)
+	names := make([]string, len(st.Planets))
+	for i, p := range st.Planets {
+		names[i] = p.Name
+	}
+	return "", fmt.Errorf("section %q in %q: %w; sections: %s", section, id, ErrNotFound, strings.Join(names, ", "))
 }
 
 func (s *Service) Search(ctx context.Context, q string, limit int) ([]index.Hit, error) {
