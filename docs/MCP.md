@@ -14,12 +14,15 @@ through the go-sdk client over each transport.
 Pick one, from the project where you want the tools (or add `--scope user` for every project):
 
 ```bash
-# stdio: works without rtk serve running
-claude mcp add knowledge -- rtk mcp --data ~/Documents/aepita/other-project/knowledge
-
-# HTTP: needs rtk serve running
+# HTTP, recommended: needs rtk serve running; search by meaning, one model shared by every session
 claude mcp add --transport http knowledge http://127.0.0.1:7878/mcp
+
+# stdio: works without rtk serve running; search is words only by default
+claude mcp add knowledge -- rtk mcp --data ~/Documents/aepita/other-project/knowledge
 ```
+
+Each Claude Code session starts its own `rtk mcp`, so stdio does not load the embedding model
+(it would cost about 560 MB per session). `rtk mcp --model multilingual-e5-small` opts in.
 
 Or commit a project `.mcp.json` (see [`.mcp.json.example`](../.mcp.json.example)):
 
@@ -75,12 +78,14 @@ The server instructions tell the agent the order: `profile` first, then `search`
 `subgraph`, then `node`, and `fragments` only when the brief is not enough.
 
 `search` uses words and meaning together once the local model has indexed the repo
-(`rtk models pull` once, then any `rtk serve` or `rtk mcp`); before that it is words only
-and never fails. `neighbors` lists subjects close in meaning that are not linked yet, to
+(`rtk models pull` once, then `rtk serve` and the HTTP transport); before that, and over
+stdio by default, it is words only and never fails. Every hit's `score` is on one scale,
+reciprocal rank fusion of the word and meaning rankings: higher is better, and scores compare
+only within one answer. `neighbors` lists subjects close in meaning that are not linked yet, to
 suggest links or place an inbox note; while search by meaning is not ready it returns an
 error saying to run `rtk models pull`. `frontier` also uses meaning: a subject close to one
 you know, with no link between them, counts as two steps away ("proche de X par le sens").
-`rtk serve --model off` and `rtk mcp --model off` turn it off.
+`rtk serve --model off` turns it off.
 
 ### What the server enforces
 
