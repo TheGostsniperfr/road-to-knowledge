@@ -84,7 +84,7 @@ func restructureCmd(ctx context.Context, log *slog.Logger, cmd string, args []st
 	if err != nil {
 		return err
 	}
-	plan, err := svc.Restructure(ctx, op, *dry)
+	plan, err := svc.Restructure(ctx, op, *dry, "")
 	if err != nil {
 		return err
 	}

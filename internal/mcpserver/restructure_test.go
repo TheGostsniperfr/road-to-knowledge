@@ -2,6 +2,7 @@ package mcpserver_test
 
 import (
 	"path/filepath"
+	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,10 +15,26 @@ func TestRestructure_SplitsOnAProposalBranch_AndLeavesMainAlone(t *testing.T) {
 	out, isErr := call(t, cs, "restructure", map[string]any{"kind": "split", "id": "lang/japonais/kana", "parts": []map[string]any{{"id": "katakana", "notions": []string{"Katakana"}}}})
 
 	require.False(t, isErr, out)
+	branch := regexp.MustCompile(`proposals/restructure-split-lang-japonais-kana-[0-9a-f]{7}`).FindString(out)
+	require.NotEmpty(t, branch, out)
 	assert.NoFileExists(t, filepath.Join(root, "galaxies/lang/japonais/katakana.md"))
-	changed := gitIn(t, root, "diff", "--name-status", "main", "proposals/restructure-split-lang-japonais-kana")
+	changed := gitIn(t, root, "diff", "--name-status", "main", branch)
 	assert.Contains(t, changed, "A\tgalaxies/lang/japonais/katakana.md")
 	assert.Contains(t, changed, "M\tgalaxies/lang/japonais/kana.md")
+}
+
+func TestRestructure_RefusesAnExistingProposalBranch(t *testing.T) {
+	cs, root := session(t)
+	args := map[string]any{"kind": "move", "id": "tech/k8s/gvisor", "to": "lang/japonais", "slug": "reorg"}
+	_, isErr := call(t, cs, "restructure", args)
+	require.False(t, isErr)
+	first := gitIn(t, root, "rev-parse", "proposals/reorg")
+
+	out, isErr := call(t, cs, "restructure", map[string]any{"kind": "move", "id": "lang/japonais/kana", "to": "tech/k8s", "slug": "reorg"})
+
+	assert.True(t, isErr)
+	assert.Contains(t, out, "already exists")
+	assert.Equal(t, first, gitIn(t, root, "rev-parse", "proposals/reorg"))
 }
 
 func TestRestructure_DryRunReturnsThePlanWithoutABranch(t *testing.T) {

@@ -52,6 +52,10 @@ type Service struct {
 	newsMu    sync.Mutex
 
 	sem semanticState
+
+	// applyHook, set only by tests, runs before each step of a restructure; an error stands in
+	// for a failing disk so the rollback can be checked.
+	applyHook func(step int) error
 }
 
 func New(ctx context.Context, root string, log *slog.Logger) (*Service, error) {
@@ -84,6 +88,7 @@ func (s *Service) Reload(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	s.book.SetLive(liveIDs(u))
 	if err := s.book.Reload(); err != nil {
 		return err
 	}

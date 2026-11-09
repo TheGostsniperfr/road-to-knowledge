@@ -409,14 +409,19 @@ func (s *Service) Due(scope string, exclude []string) ([]DueCard, error) {
 
 func (s *Service) Review(ctx context.Context, cardID string, rating int) error {
 	u, _, _, _ := s.snapshot()
-	known := false
-	for _, c := range u.Cards() {
-		if c.ID == cardID {
-			known = true
-			break
+	known := func(id string) bool {
+		for _, c := range u.Cards() {
+			if c.ID == id {
+				return true
+			}
 		}
+		return false
 	}
-	if !known {
+	// A page opened before a restructure still sends the old id; a live id is never redirected.
+	if !known(cardID) {
+		cardID = s.book.Redirects().Card(cardID)
+	}
+	if !known(cardID) {
 		return fmt.Errorf("card %q: %w", cardID, ErrNotFound)
 	}
 	if !review.Rating(rating).Valid() {
