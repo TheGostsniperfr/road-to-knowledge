@@ -80,15 +80,19 @@ The server instructions tell the agent the order: `profile` first, then `search`
 - `propose` writes on `proposals/<slug>` through a temporary worktree: your checkout and
   your main branch are never touched (ADR-0004).
 - Before committing, a proposal is loaded the way the app will load it after the merge.
-  A malformed file, an out-of-range level or a level lower than the current one (ADR-0003)
-  refuses the whole proposal, with the reasons, and leaves no branch behind.
+  A malformed file, a path at the wrong depth, an out-of-range level or a level lower than
+  the current one (ADR-0003) refuses the whole proposal, with the reasons, and leaves no
+  branch behind. A proposal whose slug starts with `triage-` cannot raise a level either:
+  the unattended routine never decides that you know something better.
 - A proposal can delete files only under `inbox/`, so a triage can clear the notes it
   placed; it can never delete a subject.
 - `capture` never overwrites: two notes in the same second get two files. The `source`
   field is reduced to one quoted line, so it cannot add frontmatter keys.
-- Every git call times out after 30 s. If commit signing is on in the knowledge repo and the
-  key is locked, the error says so instead of hanging: unlock it (`echo ok | gpg --clearsign`)
-  or turn signing off for that repo only (`git config commit.gpgsign false`).
+- Every git call times out after 30 s; the whole process group is killed (hooks, signer) and
+  the `index.lock` it left is removed, so the repo is usable right after. If commit signing
+  is on in the knowledge repo and the key is locked, the error says so instead of hanging:
+  unlock it (`echo ok | gpg --clearsign`) or turn signing off for that repo only
+  (`git config commit.gpgsign false`).
 
 ## Skills
 

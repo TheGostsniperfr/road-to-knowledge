@@ -34,7 +34,7 @@ knowledge repo with file tools: every write goes through `propose`.
 
 Rules:
 - Never change `level` (ADR-0003: levels move only when the user decides). The server refuses
-  a proposal that lowers one; do not raise one either.
+  a `triage-*` proposal that lowers or raises one, and new subjects stay at `level: 0`.
 - Keep the user's words. French stays French.
 - Edit an existing subject only by sending its whole current file from `fragments(id, raw: true)`
   with your addition, nothing else changed. Never read the repository with file tools.
