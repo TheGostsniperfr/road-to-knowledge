@@ -37,6 +37,11 @@ type Discovery struct {
 	News     bool `yaml:"news" json:"news"`
 }
 
+// Valid requires a full budget: the three shares are percentages of the same suggestions.
+func (d Discovery) Valid() bool {
+	return d.Near >= 0 && d.TwoHops >= 0 && d.OffPiste >= 0 && d.Near+d.TwoHops+d.OffPiste == 100
+}
+
 type Galaxy struct {
 	ID          string     `json:"id"`
 	Name        string     `json:"name"`
@@ -44,6 +49,7 @@ type Galaxy struct {
 	Shape       string     `json:"shape"`
 	ReviewAfter int        `json:"review_after_days"`
 	Discovery   Discovery  `json:"discovery"`
+	Pin         *Pin       `json:"pin,omitempty"`
 	Body        string     `json:"-"`
 	Path        string     `json:"-"`
 	Clusters    []*Cluster `json:"-"`

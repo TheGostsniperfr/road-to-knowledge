@@ -72,11 +72,11 @@ func Load(root string) (*Universe, []Problem, error) {
 			if gm.ReviewAfter > 0 {
 				g.ReviewAfter = gm.ReviewAfter
 			}
-			if d := gm.Discovery; d != nil {
-				if d.Near < 0 || d.TwoHops < 0 || d.OffPiste < 0 {
-					report(g.Path, "discovery percentages cannot be negative, keeping the defaults")
+			if gm.Discovery != nil {
+				if gm.Discovery.Valid() {
+					g.Discovery = *gm.Discovery
 				} else {
-					g.Discovery = *d
+					report(g.Path, "discovery shares must be positive and sum to 100, got %d + %d + %d", gm.Discovery.Near, gm.Discovery.TwoHops, gm.Discovery.OffPiste)
 				}
 			}
 		}
@@ -148,7 +148,38 @@ func Load(root string) (*Universe, []Problem, error) {
 	}
 
 	resolveLinks(u, report)
+	applyLayout(u, report)
 	return u, problems, nil
+}
+
+func applyLayout(u *Universe, report func(string, string, ...any)) {
+	path := filepath.Join(u.Root, LayoutFile)
+	l, err := readLayout(u.Root)
+	if err != nil {
+		report(path, "%v", err)
+		return
+	}
+	for _, id := range sortedPinIDs(l.Galaxies) {
+		pin := l.Galaxies[id]
+		g := u.galaxies[id]
+		switch {
+		case g == nil:
+			report(path, "pin for unknown galaxy %q", id)
+		case !pin.Valid():
+			report(path, "pin for %q must be finite and within ±%g", id, MaxCoord)
+		default:
+			g.Pin = &pin
+		}
+	}
+}
+
+func sortedPinIDs(m map[string]Pin) []string {
+	ids := make([]string, 0, len(m))
+	for id := range m {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 // resolveLinks accepts either a full id or a bare subject slug, and makes wormholes symmetric.
