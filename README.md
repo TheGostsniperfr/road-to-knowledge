@@ -20,7 +20,7 @@ MCP, without loading everything.
   FSRS from an append-only log, scoped to wherever you are zoomed.
 - **Anki**: `rtk anki export` writes an `.apkg` (also a button on every theme), `rtk anki push`
   updates a running Anki through AnkiConnect, `rtk anki import` turns any deck into cards in
-  `inbox/`. Re-exports update the same notes in Anki instead of duplicating them (ADR-0010).
+  `inbox/` (decks with media land on a proposal branch). Re-exports update the same notes in Anki instead of duplicating them (ADR-0011).
 - **Never forgets for you**: a level never drops on its own. A subject not reviewed for
   longer than its theme allows only gets an amber dot.
 - **Veille**: list RSS or Atom feeds in a theme (`sources:`). The "Veille" tab shows the
