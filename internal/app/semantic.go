@@ -22,22 +22,29 @@ const VectorsDir = ".rtk/vectors"
 type Opener func(ctx context.Context) (embed.Embedder, semantic.Thresholds, error)
 
 type semanticState struct {
-	mu     sync.Mutex
-	ctx    context.Context
-	ix     *semantic.Index
-	status semantic.Status
-	cancel context.CancelFunc
-	built  chan struct{}
+	mu  sync.Mutex
+	ctx context.Context
+	emb embed.Embedder
+	ix  *semantic.Index
+	// stopped makes a model that finishes loading after StopSemantic release itself at once.
+	stopped bool
+	loaded  chan struct{}
+	status  semantic.Status
+	cancel  context.CancelFunc
+	built   chan struct{}
 }
 
 // EnableSemantic turns on search by meaning. Until the model is loaded and the universe indexed,
 // every search falls back to words only.
 func (s *Service) EnableSemantic(ctx context.Context, open Opener) {
 	s.sem.mu.Lock()
-	s.sem.ctx = ctx
+	s.sem.ctx, s.sem.stopped = ctx, false
 	s.sem.status = semantic.Status{State: semantic.StateLoading}
+	loaded := make(chan struct{})
+	s.sem.loaded = loaded
 	s.sem.mu.Unlock()
 	go func() {
+		defer close(loaded)
 		emb, th, err := open(ctx)
 		s.sem.mu.Lock()
 		defer s.sem.mu.Unlock()
@@ -50,9 +57,44 @@ func (s *Service) EnableSemantic(ctx context.Context, open Opener) {
 			s.sem.status = semantic.Status{State: semantic.StateError, Message: err.Error()}
 			return
 		}
+		if ctx.Err() != nil || s.sem.stopped {
+			closeEmbedder(emb)
+			return
+		}
+		s.sem.emb = emb
 		s.sem.ix = semantic.New(emb, th, filepath.Join(s.root, VectorsDir))
 		s.reindexLocked()
 	}()
+}
+
+// StopSemantic cancels the running build, waits for it, then releases the model: closing the
+// model under a running build would pull it out from under the embedding batch.
+func (s *Service) StopSemantic() {
+	s.sem.mu.Lock()
+	if s.sem.cancel != nil {
+		s.sem.cancel()
+	}
+	loaded := s.sem.loaded
+	s.sem.stopped = true
+	s.sem.mu.Unlock()
+	if loaded != nil {
+		<-loaded
+	}
+	s.sem.mu.Lock()
+	done, emb := s.sem.built, s.sem.emb
+	s.sem.ix, s.sem.emb, s.sem.built, s.sem.loaded = nil, nil, nil, nil
+	s.sem.status = semantic.Status{State: semantic.StateOff}
+	s.sem.mu.Unlock()
+	if done != nil {
+		<-done
+	}
+	closeEmbedder(emb)
+}
+
+func closeEmbedder(emb embed.Embedder) {
+	if c, ok := emb.(interface{ Close() error }); ok {
+		c.Close()
+	}
 }
 
 // reindex embeds what changed since the last build, in the background; a newer reload cancels it.
@@ -80,7 +122,7 @@ func (s *Service) reindexLocked() {
 		start := time.Now()
 		n, err := ix.Build(ctx, semantic.Chunks(u))
 		if err != nil {
-			if !errors.Is(err, context.Canceled) {
+			if !errors.Is(err, context.Canceled) && !errors.Is(err, semantic.ErrOutdated) {
 				s.log.Warn("semantic index", "err", err)
 			}
 			return
@@ -149,42 +191,48 @@ type SearchHit struct {
 	Mode string `json:"mode"`
 }
 
+// Strategy picks what a search uses; only the evaluation asks for anything but Hybrid.
+type Strategy int
+
+const (
+	Hybrid Strategy = iota
+	WordsOnly
+	MeaningOnly
+	// AllWordsOnly is the first word search (every word must match), kept as a baseline.
+	AllWordsOnly
+)
+
 // rrfK is the usual constant of reciprocal rank fusion: it keeps one list's top hit from drowning the other.
 const rrfK = 60
 
 // Search mixes words (FTS5, best for names like "Cilium") and meaning (vectors, best for
-// paraphrases and the other language) with reciprocal rank fusion.
+// paraphrases and the other language) with reciprocal rank fusion. Every hit's score is on that
+// one scale, with or without meaning: higher is better, comparable within one answer only.
 func (s *Service) Search(ctx context.Context, q string, limit int) ([]SearchHit, error) {
-	return s.SearchWith(ctx, q, limit, true, true)
+	return s.SearchWith(ctx, q, limit, Hybrid)
 }
 
-// SearchWith lets the evaluation compare words only, meaning only and both.
-func (s *Service) SearchWith(ctx context.Context, q string, limit int, useWords, useMeaning bool) ([]SearchHit, error) {
+func (s *Service) SearchWith(ctx context.Context, q string, limit int, how Strategy) ([]SearchHit, error) {
 	u, idx, _, _ := s.snapshot()
 	if limit <= 0 || limit > 50 {
 		limit = 10
 	}
 	var words []index.Hit
-	if useWords {
-		var err error
-		if words, err = idx.Search(ctx, q, limit*3); err != nil {
-			return []SearchHit{}, err
-		}
+	var err error
+	switch how {
+	case Hybrid, WordsOnly:
+		words, err = idx.Search(ctx, q, limit*3)
+	case AllWordsOnly:
+		words, err = idx.SearchAllWords(ctx, q, limit*3)
 	}
-	ix := s.semanticIndex()
-	if !useMeaning {
-		ix = nil
-	}
-	if ix == nil {
-		out := make([]SearchHit, 0, min(limit, len(words)))
-		for _, h := range words[:min(limit, len(words))] {
-			out = append(out, SearchHit{Hit: h, Mode: ModeWords})
-		}
-		return out, nil
-	}
-	meaning, err := ix.Search(ctx, q, limit*3)
 	if err != nil {
-		s.log.Warn("semantic search", "err", err)
+		return []SearchHit{}, err
+	}
+	var meaning []semantic.Hit
+	if ix := s.semanticIndex(); ix != nil && (how == Hybrid || how == MeaningOnly) {
+		if meaning, err = ix.Search(ctx, q, limit*3); err != nil {
+			s.log.Warn("semantic search", "err", err)
+		}
 	}
 	type fused struct {
 		hit         SearchHit
