@@ -88,6 +88,44 @@ func TestCapture_KeepsBothNotes_WhenTwoArriveInTheSameSecond(t *testing.T) {
 	assert.Len(t, entries, 2)
 }
 
+func TestInbox_KeepsCaptureOrder_WithinTheSameSecond(t *testing.T) {
+	cs, _ := session(t)
+	for _, text := range []string{"un", "deux", "trois"} {
+		call(t, cs, "capture", map[string]any{"text": text})
+	}
+
+	out, _ := call(t, cs, "inbox", map[string]any{})
+
+	assert.Less(t, strings.Index(out, `"un"`), strings.Index(out, `"deux"`), out)
+	assert.Less(t, strings.Index(out, `"deux"`), strings.Index(out, `"trois"`), out)
+}
+
+func TestPropose_RefusesSubjectAtTheWrongDepth(t *testing.T) {
+	cs, _ := session(t)
+
+	out, isErr := call(t, cs, "propose", map[string]any{"slug": "deep", "message": "feat: deep", "files": []map[string]string{{"path": "galaxies/lang/kana.md", "content": "---\nname: Kana\n---\n"}}})
+
+	assert.True(t, isErr)
+	assert.Contains(t, out, "galaxies/<theme>/<sub-theme>/<subject>.md")
+}
+
+func TestPropose_RefusesLevelRaise_WhenSlugIsATriage(t *testing.T) {
+	cs, _ := session(t)
+
+	out, isErr := call(t, cs, "propose", map[string]any{"slug": "triage-2026-11-09", "message": "feat: triage", "files": []map[string]string{{"path": "galaxies/tech/k8s/gvisor.md", "content": "---\nname: gVisor\nlevel: 2\n---\nNoyau.\n"}}})
+
+	assert.True(t, isErr)
+	assert.Contains(t, out, "triage cannot raise")
+}
+
+func TestPropose_AllowsLevelRaise_OutsideTriage(t *testing.T) {
+	cs, _ := session(t)
+
+	out, isErr := call(t, cs, "propose", map[string]any{"slug": "teach-back-2026-11-09", "message": "feat: up", "files": []map[string]string{{"path": "galaxies/tech/k8s/gvisor.md", "content": "---\nname: gVisor\nlevel: 2\n---\nNoyau.\n"}}})
+
+	assert.False(t, isErr, out)
+}
+
 func TestCapture_CannotInjectFrontmatter_ThroughSource(t *testing.T) {
 	cs, root := session(t)
 
