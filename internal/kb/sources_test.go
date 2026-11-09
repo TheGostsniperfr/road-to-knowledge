@@ -43,8 +43,8 @@ func TestLoad_ReadsSourcesOfThemesAndSubThemes_AndReportsBadOnes(t *testing.T) {
 	u, problems, err := kb.Load(root)
 
 	require.NoError(t, err)
-	assert.Equal(t, []kb.Source{{URL: "https://go.dev/blog/feed.atom", Name: "Go blog"}}, u.Galaxy("tech").Sources)
-	assert.Equal(t, []kb.Source{{URL: "https://kubernetes.io/feed.xml"}}, u.Cluster("tech/k8s").Sources)
+	assert.Equal(t, []kb.Feed{{URL: "https://go.dev/blog/feed.atom", Name: "Go blog"}}, u.Galaxy("tech").Sources)
+	assert.Equal(t, []kb.Feed{{URL: "https://kubernetes.io/feed.xml"}}, u.Cluster("tech/k8s").Sources)
 	require.Len(t, problems, 1)
 	assert.Contains(t, problems[0].Message, "file:///etc/passwd")
 }

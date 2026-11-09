@@ -20,12 +20,12 @@ type galaxyMeta struct {
 	Shape       string     `yaml:"shape"`
 	ReviewAfter int        `yaml:"review_after_days"`
 	Discovery   *Discovery `yaml:"discovery"`
-	Sources     []Source   `yaml:"sources"`
+	Sources     []Feed     `yaml:"sources"`
 }
 
 type clusterMeta struct {
-	Name    string   `yaml:"name"`
-	Sources []Source `yaml:"sources"`
+	Name    string `yaml:"name"`
+	Sources []Feed `yaml:"sources"`
 }
 
 type starMeta struct {

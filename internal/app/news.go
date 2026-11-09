@@ -66,7 +66,7 @@ func (s *Service) Feeds() []news.Feed {
 	u, _, _, _ := s.snapshot()
 	var out []news.Feed
 	seen := map[string]bool{}
-	add := func(src kb.Source, scope string) {
+	add := func(src kb.Feed, scope string) {
 		if seen[src.URL] {
 			return
 		}
@@ -86,7 +86,7 @@ func (s *Service) Feeds() []news.Feed {
 	return out
 }
 
-func sourceName(src kb.Source) string {
+func sourceName(src kb.Feed) string {
 	if src.Name != "" {
 		return src.Name
 	}
