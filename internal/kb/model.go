@@ -89,6 +89,7 @@ type Star struct {
 	Summary  string    `json:"summary"`
 	Body     string    `json:"-"`
 	Path     string    `json:"-"`
+	Source   *Source   `json:"source,omitempty"`
 	Planets  []Planet  `json:"planets,omitempty"`
 	Cards    []Card    `json:"-"`
 	Cluster  *Cluster  `json:"-"`
