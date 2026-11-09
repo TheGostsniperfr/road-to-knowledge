@@ -152,7 +152,7 @@ func TestPropose_WritesBinaryAssetOnBranch(t *testing.T) {
 	r := gitx.Open(context.Background(), dir)
 	png := []byte{0x89, 'P', 'N', 'G', 0, 1, 2}
 
-	branch, err := r.Propose(context.Background(), "anki-import", "feat: import", []gitx.FileChange{{Path: "assets/anki/a.png", Data: png}})
+	branch, err := r.Propose(context.Background(), "anki-import", "feat: import", []gitx.FileChange{{Path: "assets/anki/a.png", Data: png}}, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, string(png), git(t, dir, "show", branch+":assets/anki/a.png"))
@@ -162,7 +162,7 @@ func TestPropose_RefusesMarkdownOutsideAssets_WhenGivenBinaryData(t *testing.T) 
 	dir := gitRepo(t)
 	r := gitx.Open(context.Background(), dir)
 
-	_, err := r.Propose(context.Background(), "x", "x", []gitx.FileChange{{Path: "galaxies/a/b.md", Data: []byte("x")}})
+	_, err := r.Propose(context.Background(), "x", "x", []gitx.FileChange{{Path: "galaxies/a/b.md", Data: []byte("x")}}, nil)
 
 	assert.ErrorIs(t, err, gitx.ErrBadAsset)
 }
