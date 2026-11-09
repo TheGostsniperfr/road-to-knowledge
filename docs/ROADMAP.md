@@ -19,15 +19,16 @@ issue body.
 
 - [ ] V2-01 Mobile: PWA, public HTTPS (Tailscale Funnel or Cloudflare Tunnel), OAuth 2.1, Claude mobile connector
 - [ ] V2-02 Semantic view from local embeddings (Ollama), `neighbors()` tool
-- [ ] V2-03 Anki: import `.apkg`, export with stable GUIDs, AnkiConnect
-- [ ] V2-04 Books: `book-ingest` skill, PDFs in MinIO, "à retenir" fiches
+- [x] V2-03 Anki: import `.apkg`, export with stable GUIDs, AnkiConnect
+- [x] V2-04 Books: `book-ingest` skill, PDFs in MinIO, "à retenir" fiches
 - [x] V2-05 Discovery: frontier suggestions with the per-theme budget, `frontier()` tool
-- [ ] V2-06 Morning brief: Miniflux collection, Claude routine triage, sources tab
-- [ ] V2-07 Evening inbox triage routine
+- [x] V2-06 Morning brief: Miniflux collection, Claude routine triage, sources tab
+- [x] V2-07 Evening inbox triage routine
 - [ ] V2-08 Granularity: split, merge and move subjects with history kept
 - [x] V2-09 Pinned positions (`layout.json`) and editing discovery settings in the app
-- [ ] V2-10 Teach-back recap: an agent quizzes you on what you may have forgotten
+- [x] V2-10 Teach-back recap: an agent quizzes you on what you may have forgotten
 - [x] V2-11 Atlas: a second, professional map view (circle packing, light and dark)
+- [x] V2-12 AI-ready audit: MCP tools tested from a real client, setup docs, agent skills
 
 ## Later
 
