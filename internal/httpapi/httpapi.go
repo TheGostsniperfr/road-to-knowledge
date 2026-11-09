@@ -363,7 +363,11 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case v := <-ch:
-			fmt.Fprintf(w, "event: reload\ndata: %d\n\n", v)
+			if v == app.NewsEvent {
+				fmt.Fprint(w, "event: news\ndata: 1\n\n")
+			} else {
+				fmt.Fprintf(w, "event: reload\ndata: %d\n\n", v)
+			}
 			fl.Flush()
 		case <-tick.C:
 			fmt.Fprint(w, ": ping\n\n")

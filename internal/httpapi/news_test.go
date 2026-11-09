@@ -30,21 +30,64 @@ func feedXML() string {
 </channel></rss>`
 }
 
-func newsServer(t *testing.T) (*httptest.Server, string) {
+// newsServerUnfetched lists the same feed in the theme and, under another name, in its
+// sub-theme, so the feed must be fetched once and belong to the theme.
+func newsServerUnfetched(t *testing.T) (*httptest.Server, string) {
 	t.Helper()
 	feed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(feedXML())) }))
 	t.Cleanup(feed.Close)
 	root := knowledge(t)
 	galaxy := "---\nname: Langues\nsources:\n  - url: " + feed.URL + "/jp.xml\n    name: JP news\n---\n"
 	require.NoError(t, os.WriteFile(filepath.Join(root, "galaxies/lang/_galaxy.md"), []byte(galaxy), 0o644))
+	cluster := "---\nname: Japonais\nsources:\n  - url: " + feed.URL + "/jp.xml\n    name: Same feed again\n---\n"
+	require.NoError(t, os.WriteFile(filepath.Join(root, "galaxies/lang/japonais/_cluster.md"), []byte(cluster), 0o644))
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	svc, err := app.New(context.Background(), root, log)
 	require.NoError(t, err)
 	ts := httptest.NewServer(httpapi.New(svc, log, nil, nil).Handler())
 	t.Cleanup(ts.Close)
+	return ts, root
+}
+
+func newsServer(t *testing.T) (*httptest.Server, string) {
+	t.Helper()
+	ts, root := newsServerUnfetched(t)
 	res := do(t, http.MethodPost, ts.URL+"/api/news/fetch", "")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	return ts, root
+}
+
+func TestNews_FetchesAFeedListedTwiceOnce_UnderTheBroaderScope(t *testing.T) {
+	ts, _ := newsServer(t)
+
+	v := getNews(t, ts.URL+"/api/news?all=1")
+
+	require.Len(t, v.Sources, 1)
+	assert.Equal(t, "lang", v.Sources[0].Scope)
+	assert.Len(t, v.Items, 2, "no duplicate items from the second listing")
+}
+
+func TestEvents_AnnounceNewArticlesAfterAFetch(t *testing.T) {
+	ts, _ := newsServerUnfetched(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ts.URL+"/api/events", nil)
+	require.NoError(t, err)
+	stream, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer stream.Body.Close()
+	buf := make([]byte, 64)
+	_, err = stream.Body.Read(buf) // ": ok", the subscription is live
+	require.NoError(t, err)
+
+	do(t, http.MethodPost, ts.URL+"/api/news/fetch", "")
+
+	var got strings.Builder
+	for !strings.Contains(got.String(), "event: news") {
+		n, err := stream.Body.Read(buf)
+		require.NoError(t, err, "stream so far: %q", got.String())
+		got.Write(buf[:n])
+	}
 }
 
 func getNews(t *testing.T, url string) app.NewsView {

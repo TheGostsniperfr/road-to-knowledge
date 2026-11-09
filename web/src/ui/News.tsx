@@ -20,12 +20,20 @@ export function News({ universe, go }: { universe: UniverseView | null; go: (id:
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [kept, setKept] = useState<Set<string>>(new Set());
+  const [arrived, setArrived] = useState(0);
+
+  // The server announces new articles from its background fetch with a "news" event.
+  useEffect(() => {
+    const es = new EventSource("/api/events");
+    es.addEventListener("news", () => setArrived((n) => n + 1));
+    return () => es.close();
+  }, []);
 
   useEffect(() => {
     let live = true;
     newsApi.list({ all }).then((v) => { if (live) { setView(v); setErr(""); } }).catch((e) => { if (live) { setView(null); setErr(String(e)); } });
     return () => { live = false; };
-  }, [all, universe?.version]);
+  }, [all, universe?.version, arrived]);
 
   const refresh = async () => {
     setBusy(true);
