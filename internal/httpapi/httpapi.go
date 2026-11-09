@@ -52,6 +52,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/ai", s.aiPreview)
 	mux.HandleFunc("GET /api/events", s.events)
 	s.ankiRoutes(mux)
+	s.semanticRoutes(mux)
 	mux.Handle("GET /assets/", confined("/assets/", filepath.Join(s.svc.Root(), "assets")))
 	mux.Handle("GET /library/", confined("/library/", filepath.Join(s.svc.Root(), "library")))
 	if s.mcp != nil {
@@ -132,6 +133,8 @@ func (s *Server) fail(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 	case errors.Is(err, app.ErrInvalid):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+	case errors.Is(err, app.ErrSemanticOff):
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 	default:
 		s.log.Error("request failed", "err", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
