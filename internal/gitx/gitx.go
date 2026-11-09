@@ -120,6 +120,24 @@ func (r *Repo) Commit(ctx context.Context, message string, paths ...string) erro
 	return err
 }
 
+// Dirty lists which of the given paths (relative to the repo root) have uncommitted changes, untracked included.
+func (r *Repo) Dirty(ctx context.Context, rel ...string) ([]string, error) {
+	if len(rel) == 0 {
+		return nil, nil
+	}
+	out, err := r.git(ctx, append([]string{"status", "--porcelain", "--untracked-files=all", "--"}, rel...)...)
+	if err != nil {
+		return nil, err
+	}
+	var dirty []string
+	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		if len(line) > 3 {
+			dirty = append(dirty, line[3:])
+		}
+	}
+	return dirty, nil
+}
+
 var ErrBadPath = errors.New("path must be a relative .md file under galaxies/ or inbox/")
 
 // ValidProposalPath blocks traversal and keeps agents inside the knowledge folders.

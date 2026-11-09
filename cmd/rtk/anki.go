@@ -12,7 +12,7 @@ import (
 )
 
 const ankiUsage = `rtk anki export [--data DIR] [--scope ID] -o FILE.apkg   cards to an Anki package
-rtk anki import [--data DIR] [--propose] FILE.apkg      new cards to inbox/, or to proposals/anki-import
+rtk anki import [--data DIR] [--propose] FILE.apkg      new cards to inbox/; with media or --propose, to proposals/anki-import
 rtk anki push   [--data DIR] [--scope ID] [--url URL]   add or update notes in a running Anki (AnkiConnect)
 `
 
@@ -31,8 +31,18 @@ func ankiCmd(ctx context.Context, log *slog.Logger, args []string) error {
 	if err != nil {
 		return err
 	}
+	warnDuplicates := func() error {
+		_, dups, err := svc.AnkiNotes(*scope)
+		for _, d := range dups {
+			fmt.Fprintf(os.Stderr, "rtk: %s asks %q twice; only the first card goes to Anki\n", d.StarID, d.Question)
+		}
+		return err
+	}
 	switch args[0] {
 	case "export":
+		if err := warnDuplicates(); err != nil {
+			return err
+		}
 		if *out == "" {
 			return errors.New("anki export: -o FILE.apkg is required")
 		}
@@ -60,10 +70,16 @@ func ankiCmd(ctx context.Context, log *slog.Logger, args []string) error {
 			st.Notes, st.Cards, st.Cloze, st.Known, st.ToInbox, st.ToSubjects)
 		fmt.Printf("media: %d copied to assets/anki, %d skipped; %d notes not understood\n", st.MediaCopied, st.MediaSkipped, st.Unsupported)
 		if branch != "" {
+			if !*propose {
+				fmt.Println("media found: images and sounds never go to main, so the import went to a proposal branch")
+			}
 			fmt.Printf("review with: git diff main...%s\n", branch)
 		}
 	case "push":
-		notes, err := svc.AnkiNotes(*scope)
+		if err := warnDuplicates(); err != nil {
+			return err
+		}
+		notes, _, err := svc.AnkiNotes(*scope)
 		if err != nil {
 			return err
 		}

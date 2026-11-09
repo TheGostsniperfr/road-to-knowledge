@@ -49,7 +49,7 @@ func apkgWith(t *testing.T, root string, edit func([]anki.Note) []anki.Note) str
 	t.Helper()
 	u, _, err := kb.Load(root)
 	require.NoError(t, err)
-	notes, err := anki.Collect(u, "")
+	notes, _, err := anki.Collect(u, "")
 	require.NoError(t, err)
 	path := filepath.Join(t.TempDir(), "x.apkg")
 	f, err := os.Create(path)
@@ -98,4 +98,58 @@ func TestAnkiImport_RejectsAFileThatIsNotAnApkg(t *testing.T) {
 	_, _, err := svc.AnkiImport(context.Background(), p, false)
 
 	assert.ErrorIs(t, err, app.ErrInvalid)
+}
+
+func cuisine(n []anki.Note, cards ...[2]string) []anki.Note {
+	for _, c := range cards {
+		n = append(n, anki.Note{CardID: "perso:" + c[0], GUID: anki.GUID("perso:" + c[0]), Deck: "Perso::Cuisine", Front: c[0], Back: c[1]})
+	}
+	return n
+}
+
+func TestAnkiImport_AppendsToTheInboxFileAndSkipsCardsAlreadyThere(t *testing.T) {
+	svc, root := ankiRepo(t)
+	first := apkgWith(t, root, func(n []anki.Note) []anki.Note { return cuisine(n, [2]string{"Caramel", "170 °C"}) })
+	second := apkgWith(t, root, func(n []anki.Note) []anki.Note {
+		return cuisine(n, [2]string{"Caramel", "170 °C"}, [2]string{"Choux", "180 °C"})
+	})
+	_, _, err := svc.AnkiImport(context.Background(), first, false)
+	require.NoError(t, err)
+
+	st, _, err := svc.AnkiImport(context.Background(), second, false)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, st.ToInbox)
+	body, err := os.ReadFile(filepath.Join(root, "inbox/anki-perso-cuisine.md"))
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(string(body), "Caramel"))
+	assert.Contains(t, string(body), "- Choux :: 180 °C")
+	assert.Equal(t, "2", gitIn(t, root, "rev-list", "--count", "HEAD", "--", "inbox/anki-perso-cuisine.md"))
+}
+
+func TestAnkiImport_RefusesToOverwriteAnInboxFileWithUncommittedChanges(t *testing.T) {
+	svc, root := ankiRepo(t)
+	path := apkgWith(t, root, func(n []anki.Note) []anki.Note { return cuisine(n, [2]string{"Caramel", "170 °C"}) })
+	inbox := filepath.Join(root, "inbox/anki-perso-cuisine.md")
+	require.NoError(t, os.MkdirAll(filepath.Dir(inbox), 0o755))
+	require.NoError(t, os.WriteFile(inbox, []byte("---\nsource: anki\n---\nnotes à moi\n"), 0o644))
+
+	_, _, err := svc.AnkiImport(context.Background(), path, false)
+
+	assert.ErrorIs(t, err, app.ErrDirty)
+	body, _ := os.ReadFile(inbox)
+	assert.Equal(t, "---\nsource: anki\n---\nnotes à moi\n", string(body))
+}
+
+func TestAnkiImport_SendsMediaToAProposalBranch_EvenWithoutPropose(t *testing.T) {
+	svc, root := ankiRepo(t)
+
+	st, branch, err := svc.AnkiImport(context.Background(), "../anki/testdata/anki-25.09.apkg", false)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, st.MediaCopied)
+	assert.Equal(t, "proposals/anki-import", branch)
+	assert.NoDirExists(t, filepath.Join(root, "assets"))
+	assert.Equal(t, "init", gitIn(t, root, "log", "-1", "--format=%s", "main"))
+	assert.Contains(t, gitIn(t, root, "show", "--name-only", "--format=", branch), "assets/anki/be13d62f-choux.png")
 }
