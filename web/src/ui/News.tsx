@@ -68,7 +68,7 @@ export function News({ universe, go }: { universe: UniverseView | null; go: (id:
           <code class="snippet">{"sources:\n  - url: https://go.dev/blog/feed.atom\n    name: Go blog"}</code></p>
       )}
       {view && view.sources.length > 0 && view.items.length === 0 && (
-        <p class="empty">Rien de neuf sur 7 jours{view.hidden ? ` qui parle de tes sujets (${view.hidden} autre${view.hidden > 1 ? "s" : ""} dans « Tout »)` : ""}.</p>
+        <p class="empty">Rien de neuf sur 30 jours{view.hidden ? ` qui parle de tes sujets (${view.hidden} autre${view.hidden > 1 ? "s" : ""} dans « Tout »)` : ""}.</p>
       )}
       {[...groups].map(([gid, items]) => (
         <section key={gid} class="fgroup">

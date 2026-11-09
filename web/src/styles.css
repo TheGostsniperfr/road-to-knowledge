@@ -327,3 +327,5 @@ a.srcl { color: var(--teal); }
 .src b { color: var(--ink); font-weight: 500; }
 .src small { font-family: var(--mono); font-size: .62rem; overflow-wrap: anywhere; }
 .src.bad small { color: var(--stale); }
+.tabs button { white-space: nowrap; padding-left: 2px; padding-right: 2px; }
+[data-theme^="atlas"] .tabs button { font-size: .72rem; }
