@@ -52,8 +52,8 @@ Try it on the bundled example first: `./bin/rtk serve --data examples/knowledge`
 Use it from Claude Code:
 
 ```bash
-claude mcp add knowledge -- rtk mcp --data /path/to/knowledge               # stdio
-claude mcp add --transport http knowledge http://127.0.0.1:7878/mcp          # while rtk serve runs
+claude mcp add --transport http knowledge http://127.0.0.1:7878/mcp          # while rtk serve runs; search by meaning
+claude mcp add knowledge -- rtk mcp --data /path/to/knowledge               # stdio; words only, no model per session
 ```
 
 Claude Desktop, the tool list with sizes, and what the server enforces: [docs/MCP.md](docs/MCP.md).
