@@ -25,7 +25,7 @@ issue body.
 - [ ] V2-06 Morning brief: Miniflux collection, Claude routine triage, sources tab
 - [ ] V2-07 Evening inbox triage routine
 - [ ] V2-08 Granularity: split, merge and move subjects with history kept
-- [ ] V2-09 Pinned positions (`layout.json`) and editing discovery settings in the app
+- [x] V2-09 Pinned positions (`layout.json`) and editing discovery settings in the app
 - [ ] V2-10 Teach-back recap: an agent quizzes you on what you may have forgotten
 
 ## Later
