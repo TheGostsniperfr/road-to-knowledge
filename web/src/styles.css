@@ -332,4 +332,16 @@ a.srcl { color: var(--teal); }
 
 /* Search by meaning: a status line under the box and a tag on hits found without a shared word. */
 .semstat { display: block; margin-top: 4px; font-family: var(--mono); font-size: .62rem; color: var(--muted); }
+/* Réorganiser: move, rename, split, merge with the plan shown before anything is written. */
+.reorg summary { cursor: pointer; }
+.reorg[open] { gap: 10px; }
+.reorg .seg { display: flex; flex-wrap: wrap; border: 1px solid var(--line-2); border-radius: 6px; }
+.reorg .field { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .8rem; }
+.reorg select, .reorg input:not([type="checkbox"]) { flex: 1; min-width: 0; background: var(--field); border: 1px solid var(--rule); border-radius: 5px; color: var(--ink); font: inherit; font-size: .78rem; padding: 4px 6px; }
+.reorg input[type="checkbox"] { accent-color: var(--accent); }
+.reorg select:focus-visible, .reorg input:focus-visible { outline: 2px solid var(--accent); }
+.reorg .plan { border-top: 1px solid var(--rule); padding-top: 8px; font-size: .78rem; color: var(--ink-2); }
+.reorg .plan ul { margin: 0 0 6px; padding-left: 16px; display: grid; gap: 2px; }
+.reorg .plan .files { font-family: var(--code-font); font-size: .66rem; overflow-wrap: anywhere; }
+.reorg .plan b { font-weight: 500; color: var(--muted); }
 .bysense { margin-left: 6px; font-style: normal; font-family: var(--mono); font-size: .58rem; padding: 0 5px; border-radius: 99px; border: 1px solid var(--line-2); color: var(--teal); vertical-align: 1px; }

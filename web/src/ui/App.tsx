@@ -8,6 +8,7 @@ import { Review } from "./Review";
 import { Right } from "./Right";
 import { dueIn, excluded, scopeOf } from "./scope";
 import { applyTheme, prefs, type Mode, type ViewName } from "./prefs";
+import { liveId } from "./reorg";
 import { TermsContext, termsFor } from "./terms";
 
 type MapView = Sky | AtlasView;
@@ -28,7 +29,7 @@ export function App() {
   const [err, setErr] = useState("");
 
   const load = useCallback(() => {
-    api.universe().then((u) => { setUniverse(u); setErr(""); }).catch((e) => setErr(String(e)));
+    return api.universe().then((u) => { setUniverse(u); setErr(""); }).catch((e) => setErr(String(e)));
   }, []);
 
   useEffect(() => {
@@ -63,13 +64,18 @@ export function App() {
 
   const first = useRef(true);
   const initialHash = useRef(location.hash);
+  // After a restructure the fiche asks to land on the subject's new id once the map has it.
+  const pending = useRef<string | null>(null);
   useEffect(() => {
     if (!universe) return;
     sky.current?.setUniverse(universe);
     if (first.current) {
       first.current = false;
-      const id = decodeURIComponent(initialHash.current.replace(/^#\/?/, ""));
+      const id = liveId(decodeURIComponent(initialHash.current.replace(/^#\/?/, "")), universe.redirects);
       if (id) setTimeout(() => sky.current?.select(id, true), 400);
+    } else if (pending.current) {
+      sky.current?.select(pending.current, true);
+      pending.current = null;
     }
   }, [universe]);
 
@@ -80,7 +86,8 @@ export function App() {
     history.replaceState(null, "", h === " " ? location.pathname : h);
   }, [selected]);
 
-  const go = useCallback((id: string) => sky.current?.select(id, true), []);
+  const go = useCallback((id: string) => sky.current?.select(liveId(id, universeRef.current?.redirects), true), []);
+  const reloadAt = useCallback(async (id: string) => { pending.current = id; await load(); }, [load]);
   const scope = scopeOf(selected);
   const due = dueIn(universe, scope.id, excluded.get(scope.id));
   const crumbs = selected ? pathOf(selected) : [];
@@ -149,7 +156,7 @@ export function App() {
           </div>
         )}
       </div>
-      <Right universe={universe} selected={selected} go={go} review={() => setReviewing(true)} />
+      <Right universe={universe} selected={selected} go={go} review={() => setReviewing(true)} reloadAt={reloadAt} />
     </div>
     </TermsContext.Provider>
   );

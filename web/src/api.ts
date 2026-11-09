@@ -34,7 +34,7 @@ export interface GalaxyView {
 
 export interface Problem { path: string; message: string }
 
-export interface UniverseView { version: number; galaxies: GalaxyView[]; problems: Problem[]; inbox: number }
+export interface UniverseView { version: number; galaxies: GalaxyView[]; problems: Problem[]; inbox: number; redirects?: Record<string, string> }
 
 export interface LinkRef { id: string; name: string; galaxy: string }
 
@@ -109,6 +109,20 @@ export interface NewsSource { url: string; name: string; scope: string; scope_na
 export interface NewsView { items: NewsItem[]; sources: NewsSource[]; hidden: number }
 
 export interface NewsReport { fetched: number; not_modified: number; skipped: number; failed: number; new_items: number; errors?: string[] }
+
+export interface SplitPart { id: string; name?: string; notions: string[] }
+
+export interface RestructureOp { kind: "move" | "split" | "merge"; id?: string; to?: string; name?: string; parts?: SplitPart[]; sources?: string[]; into?: string }
+
+export interface FileOp { kind: "move" | "write" | "delete"; path: string; from?: string }
+
+export interface Rename { from: string; to: string; at: string }
+
+export interface RestructurePlan { op: RestructureOp; files: FileOp[]; renames: Rename[]; summary: string[]; message: string }
+
+export const restructureApi = {
+  run: (op: RestructureOp, dryRun: boolean) => req<RestructurePlan>("POST", "/api/restructure", { ...op, dry_run: dryRun }),
+};
 
 export const newsApi = {
   list: (opts: { scope?: string; since?: string; all?: boolean; limit?: number }) =>
