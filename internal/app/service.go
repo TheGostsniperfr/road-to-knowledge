@@ -240,14 +240,37 @@ func (s *Service) Capture(ctx context.Context, text, source string) (string, err
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("capture: %w", err)
 	}
-	name := now.Format("2006-01-02-150405") + ".md"
-	path := filepath.Join(dir, name)
-	content := fmt.Sprintf("---\ncaptured: %s\nsource: %s\n---\n%s\n", now.Format(time.RFC3339), source, text)
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return "", fmt.Errorf("capture: %w", err)
+	// The source comes from an agent: one short line, quoted, so it can never add frontmatter keys.
+	source = strings.Join(strings.Fields(source), " ")
+	if r := []rune(source); len(r) > 80 {
+		source = string(r[:80])
 	}
-	s.commit(ctx, "chore(inbox): capture from "+source, path)
-	return "inbox/" + name, nil
+	content := fmt.Sprintf("---\ncaptured: %s\nsource: %q\n---\n%s\n", now.Format(time.RFC3339), source, text)
+	// Agents capture in bursts: two notes in the same second get distinct files instead of one overwrite.
+	stamp := now.Format("2006-01-02-150405")
+	for i := 1; ; i++ {
+		name := stamp + ".md"
+		if i > 1 {
+			name = fmt.Sprintf("%s-%d.md", stamp, i)
+		}
+		path := filepath.Join(dir, name)
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if errors.Is(err, os.ErrExist) && i < 100 {
+			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("capture: %w", err)
+		}
+		_, werr := f.WriteString(content)
+		if cerr := f.Close(); werr == nil {
+			werr = cerr
+		}
+		if werr != nil {
+			return "", fmt.Errorf("capture: %w", werr)
+		}
+		s.commit(ctx, "chore(inbox): capture from "+source, path)
+		return "inbox/" + name, nil
+	}
 }
 
 func (s *Service) Propose(ctx context.Context, slug, message string, files []gitx.FileChange) (string, error) {
@@ -257,11 +280,50 @@ func (s *Service) Propose(ctx context.Context, slug, message string, files []git
 	if len(files) == 0 {
 		return "", fmt.Errorf("propose: no files: %w", ErrInvalid)
 	}
-	branch, err := s.git.Propose(ctx, slug, message, files)
-	if errors.Is(err, gitx.ErrBadPath) {
+	if strings.TrimSpace(message) == "" {
+		return "", fmt.Errorf("propose: empty commit message, use a conventional one like \"feat(seed): japonais\": %w", ErrInvalid)
+	}
+	branch, err := s.git.Propose(ctx, slug, message, files, s.checkProposal)
+	if errors.Is(err, gitx.ErrBadPath) || errors.Is(err, gitx.ErrBadDelete) || errors.Is(err, errBadProposal) || errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
 	return branch, err
+}
+
+var errBadProposal = errors.New("proposal refused")
+
+// checkProposal loads the proposal's tree the way the app will after the merge, so an agent learns
+// about a broken file now rather than the user after merging. It also holds ADR-0003: a proposal
+// never lowers a level.
+func (s *Service) checkProposal(dir string, paths []string) error {
+	proposed := map[string]bool{}
+	for _, p := range paths {
+		proposed[p] = true
+	}
+	next, problems, err := kb.Load(dir)
+	if err != nil {
+		return fmt.Errorf("propose: load proposal: %w", err)
+	}
+	var msgs []string
+	for _, p := range problems {
+		if proposed[p.Path] {
+			msgs = append(msgs, p.Path+": "+p.Message)
+		}
+	}
+	cur, _, _, _ := s.snapshot()
+	for _, st := range next.Stars() {
+		rel, _ := filepath.Rel(dir, st.Path)
+		if !proposed[filepath.ToSlash(rel)] {
+			continue
+		}
+		if old := cur.Star(st.ID); old != nil && st.Level < old.Level {
+			msgs = append(msgs, fmt.Sprintf("%s: level %d is below the current %d; levels never drop through a proposal (ADR-0003), keep %d", filepath.ToSlash(rel), st.Level, old.Level, old.Level))
+		}
+	}
+	if len(msgs) > 0 {
+		return fmt.Errorf("%w, nothing committed: %s", errBadProposal, strings.Join(msgs, "; "))
+	}
+	return nil
 }
 
 // SetLayout replaces the pinned galaxy positions. Pins for galaxies that no longer exist are refused, not kept.
