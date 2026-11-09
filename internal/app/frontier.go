@@ -48,13 +48,13 @@ func isCandidate(s *kb.Star) bool {
 	return (s.State == kb.StateIdea || s.State == kb.StateExplore) && s.Level < 3
 }
 
+// Similar finds the known subject closest in meaning to s, when one is close enough to count.
+type Similar func(s *kb.Star) (known *kb.Star, score float32, ok bool)
+
 // Frontier ranks what to learn next around a scope (empty for the universe, a galaxy id or a cluster id).
 // Near and two-hop suggestions come from the scope. Off-piste ones are subjects with no known neighbour:
 // those of the scope itself, and those one level above it, so a cluster scope can point to a
 // neighbouring cluster and a galaxy scope to another galaxy.
-// Similar finds the known subject closest in meaning to s, when one is close enough to count.
-type Similar func(s *kb.Star) (known *kb.Star, score float32, ok bool)
-
 func Frontier(u *kb.Universe, scope string, limit int) (FrontierView, error) {
 	return FrontierWith(u, scope, limit, nil)
 }

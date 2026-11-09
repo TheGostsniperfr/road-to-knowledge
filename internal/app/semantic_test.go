@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -92,7 +93,7 @@ func TestSearch_ReturnsNothingByMeaning_BelowTheModelsNoiseFloor(t *testing.T) {
 	svc, _ := semanticRepo(t)
 	enable(t, svc, semantic.Thresholds{Search: 0.99})
 
-	hits, err := svc.SearchWith(context.Background(), "isoler conteneurs", 5, false, true)
+	hits, err := svc.SearchWith(context.Background(), "isoler conteneurs", 5, app.MeaningOnly)
 
 	require.NoError(t, err)
 	assert.Empty(t, hits)
@@ -161,4 +162,38 @@ func TestFrontier_PlacesASubjectCloseInMeaningToAKnownOne_TwoStepsAway(t *testin
 		}
 	}
 	assert.Equal(t, "proche de Container runtimes par le sens", reason)
+}
+
+// slowCloser embeds slowly and records any use after Close, like a model freed under a batch.
+type slowCloser struct {
+	embed.Fake
+	closed, usedAfterClose atomic.Bool
+}
+
+func (c *slowCloser) Embed(ctx context.Context, texts []string, kind embed.Kind) ([][]float32, error) {
+	time.Sleep(20 * time.Millisecond)
+	if c.closed.Load() {
+		c.usedAfterClose.Store(true)
+	}
+	return c.Fake.Embed(ctx, texts, kind)
+}
+
+func (c *slowCloser) Close() error { c.closed.Store(true); return nil }
+
+func TestStopSemantic_ClosesTheModelOnlyAfterTheBuildHasStopped(t *testing.T) {
+	svc, _ := semanticRepo(t)
+	model := &slowCloser{}
+	loaded := make(chan struct{})
+	svc.EnableSemantic(context.Background(), func(context.Context) (embed.Embedder, semantic.Thresholds, error) {
+		defer close(loaded)
+		return model, semantic.Thresholds{}, nil
+	})
+	<-loaded
+	time.Sleep(5 * time.Millisecond)
+
+	svc.StopSemantic()
+
+	assert.True(t, model.closed.Load())
+	assert.False(t, model.usedAfterClose.Load())
+	assert.Equal(t, semantic.StateOff, svc.SemanticStatus().State)
 }

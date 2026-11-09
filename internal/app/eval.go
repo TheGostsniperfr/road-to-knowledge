@@ -9,39 +9,78 @@ import (
 	"strings"
 )
 
+// A query is either a paraphrase (no word in common with the fiche, the other language) or a
+// name (a word the fiche contains, like "Cilium"). Words alone should win names; meaning should
+// win paraphrases. Reporting them apart shows whether the fusion keeps the best of both.
+const (
+	KindParaphrase = "paraphrase"
+	KindName       = "name"
+)
+
+// Thresholds are tuned on the "tune" set; the "heldout" set is only measured, so its numbers say
+// how the search does on questions nobody tuned for.
+const (
+	SetTune    = "tune"
+	SetHeldOut = "heldout"
+)
+
 // EvalQuery is one hand-written question with the subjects a good search must return.
 type EvalQuery struct {
 	Q    string
 	Want []string
+	Kind string
+	Set  string
 }
 
-// ExampleQueries exercise examples/knowledge: paraphrases with no shared word, the other language,
-// and proper names that words alone already find.
+func evalQ(set, kind, question string, want ...string) EvalQuery {
+	return EvalQuery{Q: question, Want: want, Kind: kind, Set: set}
+}
+
+// ExampleQueries exercise examples/knowledge.
 var ExampleQueries = []EvalQuery{
-	{"isoler des conteneurs sans machine virtuelle", []string{"tech/kubernetes/gvisor"}},
-	{"sandbox for untrusted containers", []string{"tech/kubernetes/gvisor"}},
-	{"intercepting syscalls in user space", []string{"tech/kubernetes/gvisor"}},
-	{"gVisor", []string{"tech/kubernetes/gvisor"}},
-	{"consensus algorithm with leader election", []string{"tech/donnees/raft"}},
-	{"réplication validée à la majorité", []string{"tech/donnees/raft"}},
-	{"etcd", []string{"tech/donnees/raft", "bibliotheque/tech/journal-avant-tout"}},
-	{"comment une base de données survit à une coupure de courant", []string{"bibliotheque/tech/journal-avant-tout"}},
-	{"write-ahead logging and durability", []string{"bibliotheque/tech/journal-avant-tout"}},
-	{"programmes chargés dans le noyau Linux", []string{"tech/reseau/ebpf"}},
-	{"kernel hooks for tracing and networking", []string{"tech/reseau/ebpf"}},
-	{"WebAssembly workloads on Kubernetes", []string{"tech/kubernetes/runwasi"}},
-	{"how kubelet talks to containerd", []string{"tech/kubernetes/container-runtimes"}},
-	{"OCI runtime specification", []string{"tech/kubernetes/container-runtimes"}},
-	{"Japanese syllabaries", []string{"langues/japonais/kana"}},
-	{"alphabet japonais hiragana katakana", []string{"langues/japonais/kana"}},
-	{"caractères chinois de niveau intermédiaire", []string{"langues/japonais/kanji-n3"}},
-	{"grammar markers wa ga wo", []string{"langues/japonais/particules"}},
-	{"textbook for Japanese beginners", []string{"bibliotheque/japonais/genki-1"}},
-	{"écrire de la documentation et des tickets en anglais", []string{"langues/anglais/anglais-technique"}},
-	{"reading docs in English", []string{"langues/anglais/anglais-technique"}},
+	evalQ(SetTune, KindParaphrase, "isoler des conteneurs sans machine virtuelle", "tech/kubernetes/gvisor"),
+	evalQ(SetTune, KindParaphrase, "sandbox for untrusted containers", "tech/kubernetes/gvisor"),
+	evalQ(SetTune, KindParaphrase, "intercepting syscalls in user space", "tech/kubernetes/gvisor"),
+	evalQ(SetTune, KindParaphrase, "consensus algorithm with leader election", "tech/donnees/raft"),
+	evalQ(SetTune, KindParaphrase, "réplication validée à la majorité", "tech/donnees/raft"),
+	evalQ(SetTune, KindParaphrase, "comment une base de données survit à une coupure de courant", "bibliotheque/tech/journal-avant-tout"),
+	evalQ(SetTune, KindParaphrase, "write-ahead logging and durability", "bibliotheque/tech/journal-avant-tout"),
+	evalQ(SetTune, KindParaphrase, "programmes chargés dans le noyau Linux", "tech/reseau/ebpf"),
+	evalQ(SetTune, KindParaphrase, "kernel hooks for tracing and networking", "tech/reseau/ebpf"),
+	evalQ(SetTune, KindParaphrase, "WebAssembly workloads on Kubernetes", "tech/kubernetes/runwasi"),
+	evalQ(SetTune, KindParaphrase, "Japanese syllabaries", "langues/japonais/kana"),
+	evalQ(SetTune, KindParaphrase, "caractères chinois de niveau intermédiaire", "langues/japonais/kanji-n3"),
+	evalQ(SetTune, KindParaphrase, "grammar markers wa ga wo", "langues/japonais/particules"),
+	evalQ(SetTune, KindParaphrase, "textbook for Japanese beginners", "bibliotheque/japonais/genki-1"),
+	evalQ(SetTune, KindParaphrase, "écrire de la documentation et des tickets en anglais", "langues/anglais/anglais-technique"),
+	evalQ(SetTune, KindParaphrase, "reading docs in English", "langues/anglais/anglais-technique"),
+	evalQ(SetTune, KindName, "gVisor", "tech/kubernetes/gvisor"),
+	evalQ(SetTune, KindName, "etcd", "tech/donnees/raft", "bibliotheque/tech/journal-avant-tout"),
+	evalQ(SetTune, KindName, "how kubelet talks to containerd", "tech/kubernetes/container-runtimes"),
+	evalQ(SetTune, KindName, "OCI runtime specification", "tech/kubernetes/container-runtimes"),
+	evalQ(SetTune, KindName, "alphabet japonais hiragana katakana", "langues/japonais/kana"),
+	evalQ(SetTune, KindName, "eBPF", "tech/reseau/ebpf"),
+	evalQ(SetTune, KindName, "Raft", "tech/donnees/raft"),
+	evalQ(SetTune, KindName, "runwasi", "tech/kubernetes/runwasi"),
+	evalQ(SetTune, KindName, "Genki", "bibliotheque/japonais/genki-1"),
+	evalQ(SetTune, KindName, "containerd shim", "tech/kubernetes/runwasi", "tech/kubernetes/container-runtimes"),
+
+	evalQ(SetHeldOut, KindParaphrase, "faire tourner du code dans le noyau sans module", "tech/reseau/ebpf"),
+	evalQ(SetHeldOut, KindParaphrase, "distributed agreement among replicas", "tech/donnees/raft"),
+	evalQ(SetHeldOut, KindParaphrase, "garantir qu'une transaction validée n'est pas perdue", "bibliotheque/tech/journal-avant-tout"),
+	evalQ(SetHeldOut, KindParaphrase, "the API a node agent uses to start containers", "tech/kubernetes/container-runtimes"),
+	evalQ(SetHeldOut, KindParaphrase, "apprendre l'écriture phonétique du japonais", "langues/japonais/kana"),
+	evalQ(SetHeldOut, KindParaphrase, "particles that mark the role of words in a sentence", "langues/japonais/particules"),
+	evalQ(SetHeldOut, KindName, "runc", "tech/kubernetes/container-runtimes"),
+	evalQ(SetHeldOut, KindName, "PostgreSQL", "bibliotheque/tech/journal-avant-tout"),
+	evalQ(SetHeldOut, KindName, "ACID", "bibliotheque/tech/journal-avant-tout"),
+	evalQ(SetHeldOut, KindName, "katakana", "langues/japonais/kana"),
+	evalQ(SetHeldOut, KindName, "kanji N4", "langues/japonais/kanji-n3"),
+	evalQ(SetHeldOut, KindName, "kubelet", "tech/kubernetes/container-runtimes"),
 }
 
-// ReadEvalQueries parses "question<TAB>id1,id2" lines; # starts a comment.
+// ReadEvalQueries parses "question<TAB>id1,id2[<TAB>kind[<TAB>set]]" lines; # starts a comment.
+// Kind defaults to paraphrase and set to tune.
 func ReadEvalQueries(r io.Reader) ([]EvalQuery, error) {
 	var out []EvalQuery
 	sc := bufio.NewScanner(r)
@@ -50,74 +89,110 @@ func ReadEvalQueries(r io.Reader) ([]EvalQuery, error) {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		q, ids, ok := strings.Cut(line, "\t")
-		if !ok {
+		cols := strings.Split(line, "\t")
+		if len(cols) < 2 {
 			return nil, fmt.Errorf("eval queries line %d: want question<TAB>id1,id2: %w", n, ErrInvalid)
 		}
-		out = append(out, EvalQuery{Q: strings.TrimSpace(q), Want: strings.Split(strings.ReplaceAll(ids, " ", ""), ",")})
+		e := EvalQuery{Q: strings.TrimSpace(cols[0]), Want: strings.Split(strings.ReplaceAll(cols[1], " ", ""), ","), Kind: KindParaphrase, Set: SetTune}
+		if len(cols) > 2 && cols[2] != "" {
+			e.Kind = strings.TrimSpace(cols[2])
+		}
+		if len(cols) > 3 && cols[3] != "" {
+			e.Set = strings.TrimSpace(cols[3])
+		}
+		if (e.Kind != KindParaphrase && e.Kind != KindName) || (e.Set != SetTune && e.Set != SetHeldOut) {
+			return nil, fmt.Errorf("eval queries line %d: kind is paraphrase|name, set is tune|heldout: %w", n, ErrInvalid)
+		}
+		out = append(out, e)
 	}
 	return out, sc.Err()
 }
 
-type EvalScore struct {
+type EvalRow struct {
+	Strategy  string   `json:"strategy"`
+	Set       string   `json:"set"`
+	Kind      string   `json:"kind"`
+	N         int      `json:"n"`
 	RecallAt5 float64  `json:"recall_at_5"`
 	MRR       float64  `json:"mrr"`
 	Misses    []string `json:"misses,omitempty"`
 }
 
+type EvalReport struct {
+	Rows []EvalRow `json:"rows"`
+	// Noise is the average number of hybrid results for questions the repo cannot answer.
+	Noise float64 `json:"noise"`
+}
+
 // offTopic are questions the repo cannot answer: a good search returns nothing for them.
 var offTopic = []string{"zzqx wobble frumious", "recette de la blanquette de veau", "résultats du championnat de curling", "how to knit a sweater"}
 
-type EvalReport struct {
-	Queries int `json:"queries"`
-	// Noise is the average number of results for off-topic questions.
-	Noise   float64   `json:"noise"`
-	Words   EvalScore `json:"words"`
-	Meaning EvalScore `json:"meaning"`
-	Hybrid  EvalScore `json:"hybrid"`
-}
+var strategies = []struct {
+	name string
+	how  Strategy
+}{{"all words", AllWordsOnly}, {"words", WordsOnly}, {"meaning", MeaningOnly}, {"hybrid", Hybrid}}
 
-// EvalSearch scores words only, meaning only and the fusion on the same questions. Recall@5 counts a
-// question as found when an expected subject is in the first five; MRR rewards finding it first.
+// EvalSearch scores every strategy per set and kind. Recall@5 counts a question as found when an
+// expected subject is in the first five; MRR rewards finding it first.
 func (s *Service) EvalSearch(ctx context.Context, queries []EvalQuery) (EvalReport, error) {
-	r := EvalReport{Queries: len(queries)}
-	modes := []struct {
-		out          *EvalScore
-		words, sense bool
-	}{{&r.Words, true, false}, {&r.Meaning, false, true}, {&r.Hybrid, true, true}}
-	for _, m := range modes {
-		for _, q := range queries {
-			hits, err := s.SearchWith(ctx, q.Q, 10, m.words, m.sense)
-			if err != nil {
-				return r, err
-			}
-			rank := 0
-			for i, h := range hits {
-				if slices.Contains(q.Want, h.ID) {
-					rank = i + 1
-					break
+	var r EvalReport
+	for _, st := range strategies {
+		for _, set := range []string{SetTune, SetHeldOut} {
+			for _, kind := range []string{KindParaphrase, KindName, ""} {
+				row := EvalRow{Strategy: st.name, Set: set, Kind: kind}
+				if kind == "" {
+					row.Kind = "all"
 				}
+				for _, e := range queries {
+					if e.Set != set || (kind != "" && e.Kind != kind) {
+						continue
+					}
+					hits, err := s.SearchWith(ctx, e.Q, 10, st.how)
+					if err != nil {
+						return r, err
+					}
+					row.N++
+					rank := 0
+					for i, h := range hits {
+						if slices.Contains(e.Want, h.ID) {
+							rank = i + 1
+							break
+						}
+					}
+					if rank > 0 && rank <= 5 {
+						row.RecallAt5++
+					} else {
+						row.Misses = append(row.Misses, e.Q)
+					}
+					if rank > 0 {
+						row.MRR += 1 / float64(rank)
+					}
+				}
+				if row.N == 0 {
+					continue
+				}
+				row.RecallAt5 /= float64(row.N)
+				row.MRR /= float64(row.N)
+				r.Rows = append(r.Rows, row)
 			}
-			if rank > 0 && rank <= 5 {
-				m.out.RecallAt5++
-			} else {
-				m.out.Misses = append(m.out.Misses, q.Q)
-			}
-			if rank > 0 {
-				m.out.MRR += 1 / float64(rank)
-			}
-		}
-		if len(queries) > 0 {
-			m.out.RecallAt5 /= float64(len(queries))
-			m.out.MRR /= float64(len(queries))
 		}
 	}
 	for _, q := range offTopic {
-		hits, err := s.SearchWith(ctx, q, 10, true, true)
+		hits, err := s.SearchWith(ctx, q, 10, Hybrid)
 		if err != nil {
 			return r, err
 		}
 		r.Noise += float64(len(hits)) / float64(len(offTopic))
 	}
 	return r, nil
+}
+
+// Row finds one line of the report; ok is false when the set had no such query.
+func (r EvalReport) Row(strategy, set, kind string) (EvalRow, bool) {
+	for _, row := range r.Rows {
+		if row.Strategy == strategy && row.Set == set && row.Kind == kind {
+			return row, true
+		}
+	}
+	return EvalRow{}, false
 }
