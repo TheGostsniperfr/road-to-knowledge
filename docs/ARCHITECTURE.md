@@ -13,6 +13,8 @@ internal/review    FSRS, append-only log replayed in time order
 internal/gitx      commits from the app; proposals/* branches through a temporary worktree
 internal/news      RSS/Atom fetcher, cache in .rtk/news (never committed), subject matching
 internal/anki      .apkg export and import, AnkiConnect push (ADR-0011)
+internal/embed     embedding models: pinned downloads, in-process ONNX (hugot, pure Go) (ADR-0013)
+internal/semantic  vectors per subject and notion, cached by content hash, cosine search
         ▼
 internal/app       Service: the loaded universe and the views shared by API and MCP
    ├── internal/httpapi    JSON API, SSE reload events, /assets, /mcp, embedded web app

@@ -59,7 +59,8 @@ number of themes, not with the size of fiches, except `fragments`.
 |---|---|---|---|
 | `profile` | read | ~120 tokens | `profile()` |
 | `subgraph` | read | ~150 tokens | `subgraph(id: "tech", depth: 2)` |
-| `search` | read | ~40 tokens | `search(query: "kana")` |
+| `search` | read | ~40 tokens | `search(query: "kana")`; each hit has `mode`: `words`, `meaning` or `both` |
+| `neighbors` | read | ~25 tokens per subject | `neighbors(id: "tech/kubernetes/gvisor", limit: 5)` |
 | `node` | read | ~110 tokens | `node(id: "langues/japonais/kana")` |
 | `fragments` | read | the fiche | `fragments(id: "…/kana", section: "Hiragana")`, `raw: true` for the whole file |
 | `frontier` | read | ~120 tokens | `frontier(scope: "langues", limit: 6)` |
@@ -72,6 +73,14 @@ number of themes, not with the size of fiches, except `fragments`.
 
 The server instructions tell the agent the order: `profile` first, then `search` or
 `subgraph`, then `node`, and `fragments` only when the brief is not enough.
+
+`search` uses words and meaning together once the local model has indexed the repo
+(`rtk models pull` once, then any `rtk serve` or `rtk mcp`); before that it is words only
+and never fails. `neighbors` lists subjects close in meaning that are not linked yet, to
+suggest links or place an inbox note; while search by meaning is not ready it returns an
+error saying to run `rtk models pull`. `frontier` also uses meaning: a subject close to one
+you know, with no link between them, counts as two steps away ("proche de X par le sens").
+`rtk serve --model off` and `rtk mcp --model off` turn it off.
 
 ### What the server enforces
 
