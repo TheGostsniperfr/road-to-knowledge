@@ -5,13 +5,16 @@ import type { SkyNode } from "../sky/engine";
 import { buildLayout, currentPins } from "../sky/layout";
 import { AnkiExport } from "./AnkiExport";
 import { SHARES, STEP, rebalance } from "./discovery";
+import { Reorganize } from "./Reorganize";
 import { pageOf, sourceHref, sourceLabel } from "./source";
 import { useTerms } from "./terms";
 
 const LEVELS = ["Brouillard", "Entendu parler", "Compris", "Pratiqué en lab", "Maîtrisé en prod", "Je peux l'enseigner"];
 const STATES: [State, string][] = [["idea", "Idée"], ["explore", "À explorer"], ["progress", "En cours"], ["acquired", "Acquis"]];
 
-export function Right(props: { universe: UniverseView | null; selected: SkyNode | null; go: (id: string) => void; review: () => void }) {
+type FicheProps = { universe: UniverseView | null; selected: SkyNode | null; go: (id: string) => void; review: () => void; reloadAt: (id: string) => Promise<void> };
+
+export function Right(props: FicheProps) {
   const [tab, setTab] = useState<"fiche" | "ai">("fiche");
   return (
     <aside class="right" aria-label="Fiche">
@@ -24,7 +27,7 @@ export function Right(props: { universe: UniverseView | null; selected: SkyNode 
   );
 }
 
-function Fiche({ universe, selected, go, review }: { universe: UniverseView | null; selected: SkyNode | null; go: (id: string) => void; review: () => void }) {
+function Fiche({ universe, selected, go, review, reloadAt }: FicheProps) {
   const { t, view } = useTerms();
   if (!universe) return <p>Chargement…</p>;
   if (!selected) {
@@ -81,7 +84,7 @@ function Fiche({ universe, selected, go, review }: { universe: UniverseView | nu
     );
   }
   const starId = selected.kind === "planet" ? selected.star.id : selected.id;
-  return <StarFiche id={starId} planet={selected.kind === "planet" ? selected.name : null} version={universe.version} go={go} review={review} />;
+  return <StarFiche id={starId} planet={selected.kind === "planet" ? selected.name : null} version={universe.version} go={go} review={review} universe={universe} reloadAt={reloadAt} />;
 }
 
 function PinMap({ universe }: { universe: UniverseView }) {
@@ -156,7 +159,7 @@ function GalaxySettings({ g }: { g: GalaxyView }) {
   );
 }
 
-function StarFiche({ id, planet, version, go, review }: { id: string; planet: string | null; version: number; go: (id: string) => void; review: () => void }) {
+function StarFiche({ id, planet, version, go, review, universe, reloadAt }: { id: string; planet: string | null; version: number; go: (id: string) => void; review: () => void; universe: UniverseView; reloadAt: (id: string) => Promise<void> }) {
   const { t } = useTerms();
   const [star, setStar] = useState<StarView | null>(null);
   const [err, setErr] = useState("");
@@ -227,6 +230,7 @@ function StarFiche({ id, planet, version, go, review }: { id: string; planet: st
       )}
       {star.source && <SourceLine src={star.source} planet={planet} />}
       {star.cards > 0 && <div class="row"><span class="k">{star.cards} cartes · {star.due} à revoir</span><button class="btn ghost" onClick={review}>{t.reviewOne}</button></div>}
+      <Reorganize key={star.id} star={star} universe={universe} done={reloadAt} />
       <p class="file">{star.file}</p>
     </>
   );
