@@ -1,4 +1,4 @@
-# ADR-0010: A built-in feed reader for the news, Miniflux later
+# ADR-0012: A built-in feed reader for the news, Miniflux later
 
 - Status: accepted, 2026-11-09
 
