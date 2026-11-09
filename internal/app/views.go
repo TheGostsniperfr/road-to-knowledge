@@ -66,13 +66,20 @@ type LinkRef struct {
 
 type StarView struct {
 	StarSummary
-	Path     []string  `json:"path"`
-	Summary  string    `json:"summary"`
-	Body     string    `json:"body"`
-	Evidence []string  `json:"evidence,omitempty"`
-	Tags     []string  `json:"tags,omitempty"`
-	LinkRefs []LinkRef `json:"link_refs,omitempty"`
-	File     string    `json:"file"`
+	Path     []string    `json:"path"`
+	Summary  string      `json:"summary"`
+	Body     string      `json:"body"`
+	Evidence []string    `json:"evidence,omitempty"`
+	Tags     []string    `json:"tags,omitempty"`
+	LinkRefs []LinkRef   `json:"link_refs,omitempty"`
+	File     string      `json:"file"`
+	Source   *SourceView `json:"source,omitempty"`
+}
+
+// SourceView adds what only the server can tell: whether the original file is on this machine.
+type SourceView struct {
+	kb.Source
+	Available bool `json:"available"`
 }
 
 func (s *Service) days(st *kb.Star) *int {
@@ -110,6 +117,9 @@ func (s *Service) summary(st *kb.Star) StarSummary {
 func (s *Service) starView(u *kb.Universe, st *kb.Star) StarView {
 	rel, _ := filepath.Rel(s.root, st.Path)
 	v := StarView{StarSummary: s.summary(st), Path: []string{st.Cluster.Galaxy.Name, st.Cluster.Name}, Summary: st.Summary, Body: st.Body, Evidence: st.Evidence, Tags: st.Tags, File: filepath.ToSlash(rel)}
+	if st.Source != nil {
+		v.Source = &SourceView{Source: *st.Source, Available: st.Source.Available(s.root)}
+	}
 	for _, l := range st.Links {
 		if o := u.Star(l); o != nil {
 			v.LinkRefs = append(v.LinkRefs, LinkRef{ID: o.ID, Name: o.Name, Galaxy: o.Cluster.Galaxy.Name})
@@ -278,6 +288,7 @@ type NodeBrief struct {
 	Planets   []string `json:"planets,omitempty"`
 	Wormholes []string `json:"wormholes,omitempty"`
 	Evidence  []string `json:"evidence,omitempty"`
+	Source    string   `json:"source,omitempty"`
 	Cards     int      `json:"cards"`
 	More      string   `json:"more,omitempty"`
 }
@@ -291,6 +302,12 @@ func (s *Service) Node(id string) (NodeBrief, error) {
 	}
 	sum := s.summary(st)
 	b := NodeBrief{ID: st.ID, Path: st.Cluster.Galaxy.Name + " / " + st.Cluster.Name + " / " + st.Name, Level: st.Level, State: st.State, Days: sum.Days, Summary: st.Summary, Wormholes: st.Links, Evidence: st.Evidence, Cards: len(st.Cards)}
+	if src := st.Source; src != nil {
+		b.Source = src.Title
+		if src.Author != "" {
+			b.Source += ", " + src.Author
+		}
+	}
 	for _, p := range st.Planets {
 		b.Planets = append(b.Planets, p.Name)
 	}
