@@ -34,6 +34,7 @@ const usage = `rtk: Road to Knowledge
   rtk validate [--data DIR]                           check every file, exit 1 on problems
   rtk init     DIR                                    create an empty knowledge folder
   rtk book add [--data DIR] [--title T] FILE          put a PDF in the git-ignored library, print its source block
+  rtk anki     export|import|push ...                 exchange cards with Anki, see rtk anki
 
 DIR defaults to $RTK_DATA.
 `
@@ -61,6 +62,8 @@ func main() {
 		err = initData(os.Args[2:])
 	case "book":
 		err = book(os.Args[2:])
+	case "anki":
+		err = ankiCmd(ctx, log, os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 	default:
