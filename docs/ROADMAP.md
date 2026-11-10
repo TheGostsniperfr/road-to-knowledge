@@ -29,6 +29,16 @@ issue body.
 - [x] V2-10 Teach-back recap: an agent quizzes you on what you may have forgotten
 - [x] V2-11 Atlas: a second, professional map view (circle packing, light and dark)
 - [x] V2-12 AI-ready audit: MCP tools tested from a real client, setup docs, agent skills
+- [x] V2-13 Learning paths: a course's reading order over the map, cursor, next step, `paths()` tool
+
+## V3: learn, not only map
+
+- [ ] V3-01 Course content: Genki I and II and the CCNA course as paths, cursor where Brian is (Genki II L13 workbook ex. 5, CCNA video 41), cards per lesson, Jeremy's Anki decks imported
+- [ ] V3-02 `expand` skill: a subject's family of alternatives (runc, crun, gVisor, Kata, youki; Gateway API implementations), one concise fiche each: why it exists, versus its siblings, trade-offs, when to use, status today. Runs as a Sonnet agent
+- [ ] V3-03 Sticking points: doubts and questions logged on a notion (MCP and app), turned into targeted cards, more frequent review, fed to teach-back and the morning brief
+- [ ] V3-04 Learn mode: short sessions on a path's current step (cards, small exercises), streaks, in the spirit of Duolingo but on Brian's own content
+- [ ] V3-05 Goals and quotas: per theme or path, e.g. N kanji a week, rare kana, steps a week
+- [ ] V3-06 Practice mode for skills measured by doing (cooking: recipes to try this week with what the local shop sells)
 
 ## Later
 

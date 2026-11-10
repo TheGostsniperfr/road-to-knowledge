@@ -8,11 +8,45 @@ what changed, what is open, where the next session starts.
 1. `make init`, then `make check`: fix anything red before new work.
 2. Backlog: the GitHub project board "Road to Knowledge" (`scripts/session-context.sh`
    prints the open items). Roadmap and ids: [`ROADMAP.md`](ROADMAP.md).
-3. Next action: V1-08. Brian uses the app on his real knowledge repo
-   (`TheGostsniperfr/knowledge`) for a week, with the MCP server connected (`docs/MCP.md`);
-   collect feedback in issues. Then V2-01 (mobile) with him.
+3. Next action: V3-01. Write the Genki I, Genki II and CCNA paths into Brian's knowledge repo
+   (`TheGostsniperfr/knowledge`) through Sonnet agents, with the cursor where he is (Genki II
+   L13, workbook ex. 5, potential form; CCNA video 41, Day 21 BPDU Guard and Filter). The
+   Genki II PDFs are scans without a text layer: read pages as images. The CCNA playlist
+   order is in the V2-13 log entry. V1-08 (a week of daily use) runs alongside.
 
 ## Log
+
+### 2026-11-09 · V2-13 learning paths
+
+- `paths/<id>.md` (ADR-0015): a course's reading order laid over the map. Steps cover subject
+  or notion ids; `at` is the cursor; steps before it are done; `done: true` for a step seen
+  out of order. A path never changes a level.
+- `kb` loads and validates paths (a bad cover names the subject's notion ids); `app` gives
+  progress, next step and, in each fiche, the steps that cover it; `PATCH /api/paths/{id}`
+  moves the cursor with one commit; restructures rewrite covers; `propose` accepts
+  `paths/*.md`; MCP tool `paths`.
+- UI: a "Parcours" block in the fiche of the universe, a theme and a sub-theme lists the paths
+  that cover it (progress, "Continuer" to the step's first subject, steps around the cursor
+  with "J'en suis là" and "Étape terminée"); a subject's fiche lists the steps that cover it;
+  the HUD has a pill per course under way. "Demander un parcours" drops a request in the inbox.
+  A first version used a fifth tab in the left panel; Brian found it hard to discover.
+- Research for the next steps (not in the repo): Jeremy's IT Lab playlist
+  `PLxbwE86jKRgMpuZuLBivzlM8s2Dk5lXBQ` has 126 videos, position 41 is Day 21 part 2 (BPDU
+  Guard and Filter); his Anki decks sit behind an email sign-up at jitl.jp/ccna-files.
+  Genki II textbook p. 6 of the PDF lists the kanji of each lesson, L3 to L23.
+- Study mode (same day): "Continuer", the resume dock at the bottom of the map, a fiche's
+  course steps and the E key open a reading view per course (outline grouped by lesson,
+  notions as lesson pages, self-test feeding FSRS, "Étape terminée" with undo). Reviewed by a
+  code reviewer and a design reviewer; their MUST items are fixed.
+- Map: planet labels no longer stay on screen after their planet is gone; a sub-theme only
+  draws the notions of the subject in focus.
+- Content (branch proposals/parcours-cours of the knowledge repo, worktree
+  ../knowledge-parcours): Genki I and II and the CCNA paths, topic subjects, L13 and STP
+  notions rewritten as lessons. Not merged yet.
+- Open: Brian's Chrome stops painting a page with Japanese text when driven by Claude in
+  Chrome (headless renders fine, CPU idle); to confirm on his screen.
+- Open: V3 items in the roadmap (course content, `expand` skill, sticking points, learn
+  mode, goals, practice mode).
 
 ### 2026-11-09 · V2-08 restructure: move, rename, split, merge
 
