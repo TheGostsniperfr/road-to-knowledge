@@ -112,9 +112,11 @@ type Problem struct {
 type Universe struct {
 	Root     string
 	Galaxies []*Galaxy
+	Paths    []*Path
 	galaxies map[string]*Galaxy
 	clusters map[string]*Cluster
 	stars    map[string]*Star
+	paths    map[string]*Path
 }
 
 func (u *Universe) Galaxy(id string) *Galaxy   { return u.galaxies[id] }

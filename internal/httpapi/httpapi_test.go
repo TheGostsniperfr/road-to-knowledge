@@ -30,6 +30,7 @@ func knowledge(t *testing.T) string {
 		"galaxies/lang/japonais/kana.md":  "---\nname: Kana\nlevel: 4\nreviewed: 2026-01-01\n---\nDeux syllabaires.\n\nあ :: a\nか :: ka\n\n## Hiragana\nRonds.\n",
 		"galaxies/lang/japonais/keigo.md": "---\nname: Keigo\nlevel: 0\n---\nPolitesse.\n",
 		"assets/kana.svg":                 "<svg/>",
+		"paths/genki.md":                  "---\nname: Genki\nat: l1\nsteps:\n  - id: l1\n    name: Leçon 1\n    covers: [lang/japonais/kana#hiragana]\n  - id: l2\n    name: Leçon 2\n    covers: [lang/japonais/kana]\n---\n",
 	}
 	for p, c := range files {
 		full := filepath.Join(root, p)

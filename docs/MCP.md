@@ -67,6 +67,7 @@ number of themes, not with the size of fiches, except `fragments`.
 | `node` | read | ~110 tokens | `node(id: "langues/japonais/kana")` |
 | `fragments` | read | the fiche | `fragments(id: "…/kana", section: "Hiragana")`, `raw: true` for the whole file |
 | `frontier` | read | ~120 tokens | `frontier(scope: "langues", limit: 6)` |
+| `paths` | read | ~80 tokens per path, more with `id` | `paths()` for progress and next step of every course; `paths(id: "genki-2")` for every step with its status and covers. Move the cursor with `propose` on `paths/<id>.md` |
 | `at_risk` | read | ~240 tokens | `at_risk(limit: 6)` |
 | `due` | read | ~330 tokens | `due(scope: "langues/japonais", limit: 10)` |
 | `recent` | read | ~190 tokens | `recent(days: 7)` |

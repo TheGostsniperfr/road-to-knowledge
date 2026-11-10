@@ -53,6 +53,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/events", s.events)
 	s.ankiRoutes(mux)
 	s.semanticRoutes(mux)
+	s.pathRoutes(mux)
 	s.restructureRoutes(mux)
 	mux.Handle("GET /assets/", confined("/assets/", filepath.Join(s.svc.Root(), "assets")))
 	mux.Handle("GET /library/", confined("/library/", filepath.Join(s.svc.Root(), "library")))

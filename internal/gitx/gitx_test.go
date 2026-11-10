@@ -109,6 +109,9 @@ func TestValidProposalPath_RejectsEscapes(t *testing.T) {
 		{"absolute", "/tmp/x.md"},
 		{"outside knowledge folders", "review/log.md"},
 		{"not markdown", "galaxies/a/b/c.sh"},
+		{"nested learning path", "paths/sub/genki.md"},
+		{"learning path the loader skips", "paths/_draft.md"},
+		{"learning path without a name", "paths/.md"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -116,6 +119,13 @@ func TestValidProposalPath_RejectsEscapes(t *testing.T) {
 			assert.ErrorIs(t, err, gitx.ErrBadPath)
 		})
 	}
+}
+
+func TestValidProposalPath_AcceptsALearningPath(t *testing.T) {
+	got, err := gitx.ValidProposalPath("paths/genki-2.md")
+
+	require.NoError(t, err)
+	assert.Equal(t, "paths/genki-2.md", got)
 }
 
 func TestValidAssetPath_RejectsEscapesAndActiveFormats(t *testing.T) {

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -168,7 +169,11 @@ func (r *Repo) Dirty(ctx context.Context, rel ...string) ([]string, error) {
 	return dirty, nil
 }
 
-var ErrBadPath = errors.New("path must be a relative .md file under galaxies/ or inbox/")
+var ErrBadPath = errors.New("path must be a relative .md file under galaxies/, paths/ or inbox/")
+
+// pathFile is a learning path: flat in paths/, named like the loader accepts, so no file there
+// escapes the proposal check by being skipped at load.
+var pathFile = regexp.MustCompile(`^paths/[a-z0-9][a-z0-9-]*\.md$`)
 
 // ValidProposalPath blocks traversal and keeps agents inside the knowledge folders.
 func ValidProposalPath(p string) (string, error) {
@@ -176,7 +181,8 @@ func ValidProposalPath(p string) (string, error) {
 	if filepath.IsAbs(p) || strings.HasPrefix(clean, "../") || clean == ".." || !strings.HasSuffix(clean, ".md") {
 		return "", ErrBadPath
 	}
-	if !strings.HasPrefix(clean, "galaxies/") && !strings.HasPrefix(clean, "inbox/") {
+	inPaths := pathFile.MatchString(clean)
+	if !strings.HasPrefix(clean, "galaxies/") && !strings.HasPrefix(clean, "inbox/") && !inPaths {
 		return "", ErrBadPath
 	}
 	return clean, nil

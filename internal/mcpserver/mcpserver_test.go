@@ -24,6 +24,7 @@ func session(t *testing.T) (*mcp.ClientSession, string) {
 	files := map[string]string{
 		"galaxies/lang/japonais/kana.md": "---\nname: Kana\nlevel: 4\n---\nDeux syllabaires phonétiques.\n\nあ :: a\n\n## Hiragana\nSignes ronds pour la grammaire.\n\n## Katakana\nMots empruntés.\n",
 		"galaxies/tech/k8s/gvisor.md":    "---\nname: gVisor\nlevel: 0\n---\nNoyau en espace utilisateur.\n",
+		"paths/genki.md":                 "---\nname: Genki\nat: l2\nsteps:\n  - id: l1\n    name: Leçon 1\n    covers: [lang/japonais/kana#hiragana]\n  - id: l2\n    name: Leçon 2\n    covers: [lang/japonais/kana#katakana]\n---\n",
 	}
 	for p, c := range files {
 		full := filepath.Join(root, p)
@@ -113,6 +114,36 @@ func TestFrontier_ReturnsToolError_WhenScopeIsUnknown(t *testing.T) {
 	_, isErr := call(t, cs, "frontier", map[string]any{"scope": "nope"})
 
 	assert.True(t, isErr)
+}
+
+func TestPaths_GivesTheNextStepOfEachCourse(t *testing.T) {
+	cs, _ := session(t)
+
+	out, isErr := call(t, cs, "paths", map[string]any{})
+
+	assert.False(t, isErr)
+	assert.Contains(t, out, `"next":{"id":"l2"`)
+}
+
+func TestPaths_ReturnsToolError_WhenThePathIsUnknown(t *testing.T) {
+	cs, _ := session(t)
+
+	_, isErr := call(t, cs, "paths", map[string]any{"id": "ccna"})
+
+	assert.True(t, isErr)
+}
+
+func TestPropose_AcceptsAMovedPathCursor(t *testing.T) {
+	cs, root := session(t)
+	content := "---\nname: Genki\nat: l1\nsteps:\n  - id: l1\n    name: Leçon 1\n  - id: l2\n    name: Leçon 2\n---\n"
+
+	out, isErr := call(t, cs, "propose", map[string]any{"slug": "genki-cursor", "message": "chore(path): genki at l1", "files": []map[string]string{{"path": "paths/genki.md", "content": content}}})
+
+	require.False(t, isErr, out)
+	assert.Contains(t, out, "proposals/genki-cursor")
+	onMain, err := os.ReadFile(filepath.Join(root, "paths/genki.md"))
+	require.NoError(t, err)
+	assert.Contains(t, string(onMain), "at: l2", "the live checkout keeps its cursor until the user merges")
 }
 
 func TestPropose_LandsOnProposalBranchOnly(t *testing.T) {
