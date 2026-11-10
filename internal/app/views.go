@@ -75,6 +75,9 @@ type StarView struct {
 	LinkRefs []LinkRef   `json:"link_refs,omitempty"`
 	File     string      `json:"file"`
 	Source   *SourceView `json:"source,omitempty"`
+	Steps    []StepRef   `json:"steps,omitempty"`
+	// CardList lets a lesson page rate the cards it shows with their real ids.
+	CardList []kb.Card `json:"card_list,omitempty"`
 }
 
 // SourceView adds what only the server can tell: whether the original file is on this machine.
@@ -126,6 +129,8 @@ func (s *Service) starView(u *kb.Universe, st *kb.Star) StarView {
 			v.LinkRefs = append(v.LinkRefs, LinkRef{ID: o.ID, Name: o.Name, Galaxy: o.Cluster.Galaxy.Name})
 		}
 	}
+	v.Steps = s.stepsCovering(u, st.ID)
+	v.CardList = st.Cards
 	return v
 }
 

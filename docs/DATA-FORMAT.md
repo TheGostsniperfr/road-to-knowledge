@@ -177,6 +177,41 @@ links, never an id that exists today.
 | split | original rewritten without the notions, one new file per part (`links:` back to the original) | each card that left |
 | merge | target rewritten (highest level, union of links, evidence, tags, each source as a `##` section), sources deleted | each absorbed subject |
 
+## Learning paths
+
+`paths/<id>.md`, one file per book or course (ADR-0015). The steps follow the course's order
+and point at subjects or notions on the map; the map stays organised by topic.
+
+```markdown
+---
+name: CCNA 200-301, Jeremy's IT Lab
+at: day-21-bpdu-guard          # current step; steps before it are done
+source:                         # optional, same block as a fiche
+  title: Free CCNA 200-301 Complete Course
+  url: https://www.youtube.com/playlist?list=PLxbwE86jKRgMpuZuLBivzlM8s2Dk5lXBQ
+steps:
+  - id: day-21-bpdu-guard       # lowercase letters, digits, dashes; unique in the file
+    name: Day 21, BPDU Guard et BPDU Filter
+    covers: [tech/reseau/stp#bpdu-guard, tech/reseau/stp#bpdu-filter]
+    url: https://www.youtube.com/watch?v=…
+  - id: day-22-rstp
+    name: Day 22, Rapid STP
+    covers: [tech/reseau/stp]
+    page: 12                    # page in the source file, when it is a PDF in library/
+    done: true                  # seen out of order
+---
+First paragraph: the summary shown in the Parcours tab.
+```
+
+The file name is the path id: lowercase letters, digits and dashes. `at: end` marks the
+whole path finished; a step with `done: true` counts as done even under the cursor, and the
+next step is then the first one not done. `url` must be `http(s)`. Keys a step does not know
+are kept when the app rewrites the file; comments inside `steps:` are not.
+
+A notion id is the subject id, `#`, then the heading in lowercase with every run of signs
+and spaces turned into one dash: `## BPDU Guard` is `#bpdu-guard`, `## Yōon` is `#yōon`.
+A cover to nowhere is a problem that names the notions the subject has.
+
 ## Validation
 
 `rtk validate --data DIR` lists every problem and exits 1 if there is one. The app shows

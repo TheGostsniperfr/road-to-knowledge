@@ -168,6 +168,7 @@ func Load(root string) (*Universe, []Problem, error) {
 
 	resolveLinks(u, report)
 	applyLayout(u, report)
+	loadPaths(u, report)
 	return u, problems, nil
 }
 

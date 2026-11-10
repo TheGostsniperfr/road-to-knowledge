@@ -125,14 +125,14 @@ func New(svc *app.Service, version string) *mcp.Server {
 		})
 
 	type proposeFile struct {
-		Path    string `json:"path" jsonschema:"relative path under galaxies/ or inbox/, ending in .md"`
+		Path    string `json:"path" jsonschema:"relative path under galaxies/, paths/ (a learning path) or inbox/, ending in .md"`
 		Content string `json:"content,omitempty" jsonschema:"full file content: YAML frontmatter, summary paragraph, ## notions, question :: answer cards"`
 		Delete  bool   `json:"delete,omitempty" jsonschema:"remove this file instead; only for inbox/ notes placed by this proposal"`
 	}
 	type proposeIn struct {
 		Slug    string        `json:"slug" jsonschema:"branch name suffix in lowercase-dashes, e.g. fiche-kana or triage-2026-11-09; reusing a slug adds a commit to that branch"`
 		Message string        `json:"message" jsonschema:"conventional commit message, e.g. feat(japonais): fiche kana"`
-		Files   []proposeFile `json:"files" jsonschema:"one or more files; paths under galaxies/ or inbox/, ending in .md"`
+		Files   []proposeFile `json:"files" jsonschema:"one or more files; under galaxies/, paths/ or inbox/, ending in .md"`
 	}
 	mcp.AddTool(s, &mcp.Tool{Name: "propose", Description: "Create or replace subject files (and delete placed inbox notes) on branch proposals/<slug>, in one commit. The proposal is loaded like the app would load it and refused, with the reasons, if a file is malformed or lowers a level. The user reviews and merges; nothing reaches main directly."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in proposeIn) (*mcp.CallToolResult, any, error) {
@@ -148,6 +148,7 @@ func New(svc *app.Service, version string) *mcp.Server {
 		})
 
 	addNews(s, svc)
+	addPaths(s, svc)
 	addSemantic(s, svc)
 	return s
 }

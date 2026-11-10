@@ -152,6 +152,7 @@ func (s *Service) Watch(ctx context.Context) error {
 		})
 	}
 	addTree(filepath.Join(s.root, kb.GalaxiesDir))
+	addTree(filepath.Join(s.root, kb.PathsDir))
 	w.Add(s.root)
 	os.MkdirAll(filepath.Dir(s.book.Path()), 0o755)
 	w.Add(filepath.Dir(s.book.Path()))
@@ -342,12 +343,19 @@ func (s *Service) checkProposal(slug, dir string, paths []string) error {
 	if err != nil {
 		return fmt.Errorf("propose: load proposal: %w", err)
 	}
+	cur, _, curProblems, _ := s.snapshot()
+	// A path loads with a broken cover, so a proposal touching it only answers for what it breaks.
+	already := map[kb.Problem]bool{}
+	for _, p := range curProblems {
+		if strings.HasPrefix(p.Path, kb.PathsDir+"/") {
+			already[p] = true
+		}
+	}
 	for _, p := range problems {
-		if proposed[p.Path] {
+		if proposed[p.Path] && !already[p] {
 			msgs = append(msgs, p.Path+": "+p.Message)
 		}
 	}
-	cur, _, _, _ := s.snapshot()
 	for _, st := range next.Stars() {
 		rel, _ := filepath.Rel(dir, st.Path)
 		if !proposed[filepath.ToSlash(rel)] {

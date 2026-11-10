@@ -326,6 +326,9 @@ func (s *Service) plan(op Op) (Plan, error) {
 	if err := p.rewriteLinks(); err != nil {
 		return Plan{}, err
 	}
+	if err := p.rewritePaths(); err != nil {
+		return Plan{}, err
+	}
 	if err := p.keepEmptiedSubThemes(); err != nil {
 		return Plan{}, err
 	}
@@ -851,7 +854,9 @@ var deepLink = regexp.MustCompile(`\(#/([^()\s]+)\)`)
 // rewriteLinks points every reference this plan breaks at its new id, in every subject file the
 // plan leaves in place, moved files included: `links:` entries (full ids, bare slugs, id#notion)
 // and deep links in the text.
-func (p *planner) rewriteLinks() error {
+// resolver maps one reference this plan breaks to its new id; bareSlug allows the short form
+// `links:` accepts. It reports false when the plan renames nothing.
+func (p *planner) resolver() (func(ref string, bareSlug bool) (string, bool), bool) {
 	mapping := map[string]string{}
 	for _, r := range p.renames {
 		if !strings.Contains(r.From, ":") {
@@ -859,15 +864,14 @@ func (p *planner) rewriteLinks() error {
 		}
 	}
 	if len(mapping) == 0 && len(p.notions) == 0 {
-		return nil
+		return nil, false
 	}
 	slugs := map[string][]string{}
 	for _, st := range p.u.Stars() {
 		slug := st.ID[strings.LastIndex(st.ID, "/")+1:]
 		slugs[slug] = append(slugs[slug], st.ID)
 	}
-	// resolve maps one reference; bareSlug allows the short form `links:` accepts.
-	resolve := func(ref string, bareSlug bool) (string, bool) {
+	return func(ref string, bareSlug bool) (string, bool) {
 		if to, ok := p.notions[ref]; ok {
 			return to, true
 		}
@@ -888,6 +892,13 @@ func (p *planner) rewriteLinks() error {
 			return to + "#" + frag, true
 		}
 		return to, true
+	}, true
+}
+
+func (p *planner) rewriteLinks() error {
+	resolve, ok := p.resolver()
+	if !ok {
+		return nil
 	}
 	stars := p.u.Stars()
 	sort.Slice(stars, func(i, j int) bool { return stars[i].ID < stars[j].ID })
@@ -943,6 +954,53 @@ func (p *planner) rewriteLinks() error {
 		if changed {
 			p.write(rel, c)
 		}
+	}
+	return nil
+}
+
+// rewritePaths points the covers of every learning path at the ids this plan gives, so a course
+// follows its subjects through a move, a split or a merge (ADR-0015).
+func (p *planner) rewritePaths() error {
+	resolve, ok := p.resolver()
+	if !ok {
+		return nil
+	}
+	for _, path := range p.u.Paths {
+		rel := p.rel(path.File)
+		c, err := p.content(rel)
+		if err != nil {
+			return err
+		}
+		front, _, err := kb.SplitFile([]byte(c))
+		if err != nil {
+			continue
+		}
+		var m struct {
+			Steps []kb.Step `yaml:"steps"`
+		}
+		if yaml.Unmarshal(front, &m) != nil {
+			continue
+		}
+		changed := false
+		for i := range m.Steps {
+			var out []string
+			for _, ref := range m.Steps[i].Covers {
+				if to, ok := resolve(ref, false); ok {
+					ref, changed = to, true
+				}
+				if !slices.Contains(out, ref) {
+					out = append(out, ref)
+				}
+			}
+			m.Steps[i].Covers = out
+		}
+		if !changed {
+			continue
+		}
+		if c, err = setFields(c, map[string]any{"steps": m.Steps}); err != nil {
+			return fmt.Errorf("restructure %s: %w", rel, err)
+		}
+		p.write(rel, c)
 	}
 	return nil
 }
@@ -1091,10 +1149,10 @@ func (s *Service) applyPlan(ctx context.Context, plan Plan) (err error) {
 
 // live maps an id from before a restructure to the id it has today; unknown ids pass through.
 func (s *Service) live(u *kb.Universe, id string) string {
-	if u.Star(id) != nil || u.Cluster(id) != nil || u.Galaxy(id) != nil {
+	base, frag, hasFrag := strings.Cut(id, "#")
+	if u.Star(base) != nil || u.Cluster(base) != nil || u.Galaxy(base) != nil {
 		return id
 	}
-	base, frag, hasFrag := strings.Cut(id, "#")
 	to, ok := s.book.Redirects().ID(base)
 	if !ok {
 		return id
