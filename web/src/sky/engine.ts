@@ -56,10 +56,13 @@ export class Sky {
   private running = false;
   private dirty = true;
   private visible = true;
+  private paused = false;
+  private pointer: [number, number] | null = null;
   private reduce = reduceMotion();
   private T0 = performance.now();
   private born = performance.now();
   private frames = 0;
+  private pass = 0;
   private fpsT = performance.now();
   private lastScale = "";
   private glowCache = new Map<number, HTMLCanvasElement>();
@@ -114,6 +117,12 @@ export class Sky {
     this.flight = null;
     this.target.k = clampK(this.target.k * f);
     this.kick();
+  }
+
+  // Study mode covers the map: the loop stops instead of drawing frames nobody sees.
+  setPaused(on: boolean) {
+    this.paused = on;
+    if (!on) this.kick();
   }
 
   destroy() {
@@ -173,14 +182,14 @@ export class Sky {
 
   private kick() {
     this.dirty = true;
-    if (this.running || !this.visible) return;
+    if (this.running || !this.visible || this.paused) return;
     this.running = true;
     requestAnimationFrame((t) => this.frame(t));
   }
 
   private frame(now: number) {
     this.running = false;
-    if (!this.visible || document.hidden) return;
+    if (!this.visible || this.paused || document.hidden) return;
     const { cam, target } = this;
     if (this.flight) {
       const fl = this.flight, t = Math.min(1, (now - fl.t0) / fl.dur), [x, y, w] = fl.f(ease(t));
@@ -279,6 +288,7 @@ export class Sky {
   private draw(t: number) {
     const { ctx, cam, W, H } = this, k = cam.k;
     this.hits = [];
+    this.pass++;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     if (!this.gl) {
@@ -394,7 +404,9 @@ export class Sky {
       }
       const rs = (0.9 + s.level * 0.55) * f;
       s.rs = rs;
-      const showP = s.planets.length > 0 && s.u * k > 2.2, pa = ramp(s.u * k, 2.2, 5);
+      // Notions orbit only the subject in focus, or one zoomed in enough to fill the view: a
+      // sub-theme with hundreds of notions drawn at once is unreadable and slow.
+      const showP = s.planets.length > 0 && s.u * k > 2.2 && (this.inFocus(s) || this.overOrbit(s, sx, sy) || s.u * k > 9), pa = ramp(s.u * k, 2.2, 5);
       if (showP) this.drawPlanets(s, sx, sy, t, pa, true);
       this.starGlyph(s, sx, sy, rs, va, t, s === this.hovered || s === this.selected);
       if (showP) this.drawPlanets(s, sx, sy, t, pa, false);
@@ -423,6 +435,19 @@ export class Sky {
     }
   }
 
+  // The pointer on its way from a star to one of its planets keeps the orbits drawn.
+  private overOrbit(s: SNode, sx: number, sy: number): boolean {
+    if (!this.pointer) return false;
+    const outer = s.u * (3 + 2.2 * (s.planets.length - 1)) * this.cam.k + 12;
+    const dx = (this.pointer[0] - sx) / outer, dy = (this.pointer[1] - sy) / (outer * 0.42 + 12);
+    return dx * dx + dy * dy <= 1;
+  }
+
+  private inFocus(s: SNode): boolean {
+    const sel = this.selected, hov = this.hovered;
+    return s === sel || s === hov || (sel?.kind === "planet" && sel.star === s) || (hov?.kind === "planet" && hov.star === s);
+  }
+
   private drawPlanets(s: SNode, sx: number, sy: number, t: number, pa: number, back: boolean) {
     const { ctx } = this, k = this.cam.k;
     for (const p of s.planets) {
@@ -448,7 +473,7 @@ export class Sky {
       ctx.arc(px, py, pr, 0, TAU);
       ctx.fill();
       ctx.globalAlpha = 1;
-      p.sx = px; p.sy = py; p.rs = pr;
+      p.sx = px; p.sy = py; p.rs = pr; p.pass = this.pass;
       p.x = s.x + (px - sx) / k; p.y = s.y + (py - sy) / k;
       this.hits.push({ n: p, x: px, y: py, r: Math.max(8, pr + 4), d: 3 });
     }
@@ -521,7 +546,7 @@ export class Sky {
     }
     for (const s of this.layout.stars) {
       if (s.u * k < 4) continue;
-      for (const p of s.planets) this.label(p.name, p.sx, p.sy + p.rs + 13, 11, "500", ramp(s.u * k, 4, 7), "#C9D4EA");
+      for (const p of s.planets) if (p.pass === this.pass) this.label(p.name, p.sx, p.sy + p.rs + 13, 11, "500", ramp(s.u * k, 4, 7), "#C9D4EA");
     }
   }
 
@@ -579,6 +604,7 @@ export class Sky {
       }
     });
     on(cv, "pointermove", (e) => {
+      this.pointer = [e.offsetX, e.offsetY];
       if (this.ptrs.has(e.pointerId)) this.ptrs.set(e.pointerId, [e.offsetX, e.offsetY]);
       if (this.ptrs.size === 2 && this.pinch) {
         const [a, b] = [...this.ptrs.values()];
@@ -620,6 +646,7 @@ export class Sky {
     on(cv, "pointerup", up);
     on(cv, "pointercancel", up);
     on(cv, "pointerleave", () => {
+      this.pointer = null;
       if (this.hovered) {
         this.hovered = null;
         this.kick();

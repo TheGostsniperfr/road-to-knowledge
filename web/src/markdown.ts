@@ -55,6 +55,21 @@ export async function renderMermaid(root: HTMLElement) {
   }
 }
 
+export interface QA { q: string; a: string }
+
+// A lesson page shows the text and the cards apart: the cards become a self-test.
+export function splitCards(md: string): { text: string; cards: QA[] } {
+  let inFence = false;
+  const text: string[] = [], cards: QA[] = [];
+  for (const line of md.split("\n")) {
+    if (fence.test(line)) inFence = !inFence;
+    const m = inFence ? null : cardLine.exec(line);
+    if (m) cards.push({ q: m[1], a: m[2] });
+    else text.push(line);
+  }
+  return { text: text.join("\n").replace(/\n{3,}/g, "\n\n").trim(), cards };
+}
+
 /** Extracts the "## name" section of a fiche, for a planet. */
 export function section(md: string, name: string): string {
   const lines = md.split("\n");

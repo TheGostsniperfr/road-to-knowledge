@@ -72,6 +72,8 @@ export interface PNode {
   sx: number;
   sy: number;
   rs: number;
+  // Draw pass in which sx/sy were last computed; a label is drawn only for the current pass.
+  pass?: number;
 }
 
 export type SkyNode = GNode | CNode | SNode | PNode;

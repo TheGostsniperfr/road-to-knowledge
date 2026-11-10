@@ -4,8 +4,12 @@ import { AtlasView } from "../atlas/atlas";
 import { Sky, type SkyNode } from "../sky/engine";
 import { pathOf } from "../sky/layout";
 import { Left } from "./Left";
+import { ContinuePills, usePaths } from "./Paths";
+import { inProgress } from "./paths";
 import { Review } from "./Review";
 import { Right } from "./Right";
+import { Study } from "./Study";
+import { parseStudyHash, studyHash, type StudyRef } from "./study";
 import { dueIn, excluded, scopeOf } from "./scope";
 import { applyTheme, prefs, type Mode, type ViewName } from "./prefs";
 import { liveId } from "./reorg";
@@ -27,6 +31,8 @@ export function App() {
   const [reviewing, setReviewing] = useState(false);
   const [webgl, setWebgl] = useState(true);
   const [err, setErr] = useState("");
+  // Study mode replaces the map; the hidden map stops drawing, so reading costs no GPU.
+  const [study, setStudy] = useState<StudyRef | null>(() => parseStudyHash(location.hash));
 
   const load = useCallback(() => {
     return api.universe().then((u) => { setUniverse(u); setErr(""); }).catch((e) => setErr(String(e)));
@@ -71,7 +77,7 @@ export function App() {
     sky.current?.setUniverse(universe);
     if (first.current) {
       first.current = false;
-      const id = liveId(decodeURIComponent(initialHash.current.replace(/^#\/?/, "")), universe);
+      const id = parseStudyHash(initialHash.current) ? null : liveId(decodeURIComponent(initialHash.current.replace(/^#\/?/, "")), universe);
       if (id) setTimeout(() => sky.current?.select(id, true), 400);
     } else if (pending.current) {
       sky.current?.select(pending.current, true);
@@ -79,14 +85,50 @@ export function App() {
     }
   }, [universe]);
 
-  // The hash mirrors the selection so a subject can be bookmarked or opened from a terminal.
+  // The hash mirrors the selection, or the lesson open in study mode, so either can be bookmarked.
   useEffect(() => {
-    if (first.current) return;
+    if (study) {
+      history.replaceState(null, "", studyHash(study));
+      return;
+    }
+    if (first.current) {
+      if (parseStudyHash(location.hash)) history.replaceState(null, "", location.pathname);
+      return;
+    }
     const h = selected ? "#/" + selected.id.split("/").map(encodeURIComponent).join("/") : " ";
     history.replaceState(null, "", h === " " ? location.pathname : h);
-  }, [selected]);
+  }, [selected, study]);
 
   const go = useCallback((id: string) => sky.current?.select(liveId(id, universeRef.current), true), []);
+  const paths = usePaths(universe?.version);
+  useEffect(() => sky.current?.setPaused(!!study), [study, view]);
+  // E opens study mode on the course under way, from anywhere on the map.
+  const pathsRef = useRef(paths);
+  pathsRef.current = paths;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "e" || e.ctrlKey || e.metaKey || e.altKey || study) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const p = inProgress(pathsRef.current)[0];
+      if (p) openStudy(p.id);
+    };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, [study]);
+  // Opening study mode adds one history entry, so the browser's Back closes it.
+  const openStudy = useCallback((path: string, step?: string) => {
+    const ref = { path, step: step ?? null };
+    setReviewing(false);
+    history.pushState(null, "", studyHash(ref));
+    setStudy(ref);
+  }, []);
+  useEffect(() => {
+    const onNav = () => setStudy(parseStudyHash(location.hash));
+    addEventListener("popstate", onNav);
+    addEventListener("hashchange", onNav);
+    return () => { removeEventListener("popstate", onNav); removeEventListener("hashchange", onNav); };
+  }, []);
+  const studyToMap = useCallback((id: string) => { setStudy(null); setTimeout(() => sky.current?.select(liveId(id, universeRef.current), true), 60); }, []);
   const reloadAt = useCallback(async (id: string) => { pending.current = id; await load(); }, [load]);
   const scope = scopeOf(selected);
   const due = dueIn(universe, scope.id, excluded.get(scope.id));
@@ -96,7 +138,7 @@ export function App() {
   const t = termsFor(view);
   return (
     <TermsContext.Provider value={{ view, t }}>
-    <div class="app">
+    <div class="app" aria-hidden={study ? true : undefined} inert={study ? true : undefined}>
       <Left universe={universe} selected={selected} go={go} />
       <div class="center">
         {view === "galaxy" ? (
@@ -145,6 +187,7 @@ export function App() {
             <ul>{problems.map((p) => <li key={p.path + p.message}>{p.path} : {p.message}</li>)}</ul>
           </details>
         )}
+        <ContinuePills paths={paths} onStudy={openStudy} />
         <span class="hint">glisser · molette ou pincer · cliquer{view === "atlas" ? " · Échap pour remonter" : ""}</span>
         {view === "galaxy" && <span class="fps">{fps} i/s</span>}
         {view === "atlas" && (
@@ -156,8 +199,12 @@ export function App() {
           </div>
         )}
       </div>
-      <Right universe={universe} selected={selected} go={go} review={() => setReviewing(true)} reloadAt={reloadAt} />
+      <Right universe={universe} paths={paths} selected={selected} go={go} review={() => setReviewing(true)} reloadAt={reloadAt} onStudy={openStudy} />
     </div>
+    {study && universe && (
+      <Study path={study.path} step={study.step} version={universe?.version ?? 0}
+        onStep={(step) => setStudy({ path: study.path, step })} onClose={() => setStudy(null)} onMap={studyToMap} />
+    )}
     </TermsContext.Provider>
   );
 }

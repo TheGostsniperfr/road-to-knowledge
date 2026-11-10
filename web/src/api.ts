@@ -47,7 +47,21 @@ export interface StarView extends StarSummary {
   link_refs?: LinkRef[];
   file: string;
   source?: Source;
+  steps?: StepRef[];
+  card_list?: { id: string; q: string; a: string }[];
 }
+
+export type StepStatus = "done" | "current" | "todo";
+
+export interface StepRef { path: string; path_name: string; step: string; step_name: string; status: StepStatus }
+
+export interface CoverView { id: string; star: string; name: string; level: number; state: State; missing?: boolean }
+
+export interface StepView { id: string; name: string; status: StepStatus; url?: string; page?: number; covers: CoverView[] }
+
+export interface PathSummary { id: string; name: string; summary: string; done: number; total: number; at?: string; next?: StepView; stars: string[] }
+
+export interface PathView extends PathSummary { source?: Source; steps: StepView[]; file: string }
 
 export interface Source { title: string; author?: string; year?: number; pages?: number; file?: string; url?: string; available: boolean }
 
@@ -122,6 +136,12 @@ export interface RestructurePlan { op: RestructureOp; files: FileOp[]; renames: 
 
 export const restructureApi = {
   run: (op: RestructureOp, dryRun: boolean, planHash = "") => req<RestructurePlan>("POST", "/api/restructure", { ...op, dry_run: dryRun, plan_hash: planHash }),
+};
+
+export const pathsApi = {
+  list: () => req<PathSummary[]>("GET", "/api/paths"),
+  get: (id: string) => req<PathView>("GET", `/api/paths/${encodeURIComponent(id)}`),
+  setAt: (id: string, at: string) => req<PathView>("PATCH", `/api/paths/${encodeURIComponent(id)}`, { at }),
 };
 
 export const newsApi = {

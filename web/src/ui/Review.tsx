@@ -44,6 +44,8 @@ export function Review({ universe, scope, onClose }: { universe: UniverseView | 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      // Study mode sits on top: keys belong to it, never to a review hidden underneath.
+      if (document.querySelector(".study")) return;
       if (e.key === "Escape") close();
       else if (e.key === " " && card && !shown) { e.preventDefault(); setShown(true); }
       else if (shown && ["1", "2", "3", "4"].includes(e.key)) grade(+e.key);
