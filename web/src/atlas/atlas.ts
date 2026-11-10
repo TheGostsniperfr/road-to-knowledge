@@ -72,6 +72,15 @@ export class AtlasView {
     this.kick();
   }
 
+  // Study mode covers the map: nothing is drawn until it comes back.
+  setPaused(on: boolean) {
+    this.paused = on;
+    if (on) {
+      cancelAnimationFrame(this.frame);
+      this.frame = 0;
+    } else this.kick();
+  }
+
   destroy() {
     cancelAnimationFrame(this.frame);
     this.cleanup.forEach((f) => f());
@@ -178,7 +187,7 @@ export class AtlasView {
       this.kick();
     }, { passive: false });
     on(window, "keydown", (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || !this.selected || (e.target as HTMLElement)?.closest?.("input,textarea") || document.querySelector(".review")) return;
+      if (e.key !== "Escape" || this.paused || !this.selected || (e.target as HTMLElement)?.closest?.("input,textarea") || document.querySelector(".review")) return;
       const p = this.selected.parent;
       this.select(p && p.kind !== "root" ? p.id : null);
     });
@@ -221,7 +230,10 @@ export class AtlasView {
 
   // --- drawing ---
 
+  private paused = false;
+
   private kick() {
+    if (this.paused) return;
     if (!this.frame) this.frame = requestAnimationFrame(() => { this.frame = 0; this.draw(); });
   }
 

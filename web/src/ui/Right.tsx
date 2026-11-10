@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { api, type AIPreview, type Discovery, type GalaxyView, type Source, type State, type StarView, type UniverseView } from "../api";
+import { api, type PathSummary, type AIPreview, type Discovery, type GalaxyView, type Source, type State, type StarView, type UniverseView } from "../api";
 import { renderMarkdown, renderMermaid, section } from "../markdown";
 import type { SkyNode } from "../sky/engine";
 import { buildLayout, currentPins } from "../sky/layout";
 import { AnkiExport } from "./AnkiExport";
 import { SHARES, STEP, rebalance } from "./discovery";
+import { LEVELS } from "./levels";
+import { PathsBlock } from "./Paths";
 import { Reorganize } from "./Reorganize";
 import { pageOf, sourceHref, sourceLabel } from "./source";
 import { useTerms } from "./terms";
 
-const LEVELS = ["Brouillard", "Entendu parler", "Compris", "Pratiqué en lab", "Maîtrisé en prod", "Je peux l'enseigner"];
 const STATES: [State, string][] = [["idea", "Idée"], ["explore", "À explorer"], ["progress", "En cours"], ["acquired", "Acquis"]];
 
-type FicheProps = { universe: UniverseView | null; selected: SkyNode | null; go: (id: string) => void; review: () => void; reloadAt: (id: string) => Promise<void> };
+type FicheProps = { universe: UniverseView | null; paths: PathSummary[]; selected: SkyNode | null; go: (id: string) => void; review: () => void; reloadAt: (id: string) => Promise<void>; onStudy: (path: string, step?: string) => void };
 
 export function Right(props: FicheProps) {
   const [tab, setTab] = useState<"fiche" | "ai">("fiche");
@@ -27,7 +28,7 @@ export function Right(props: FicheProps) {
   );
 }
 
-function Fiche({ universe, selected, go, review, reloadAt }: FicheProps) {
+function Fiche({ universe, paths, selected, go, review, reloadAt, onStudy }: FicheProps) {
   const { t, view } = useTerms();
   if (!universe) return <p>Chargement…</p>;
   if (!selected) {
@@ -37,6 +38,7 @@ function Fiche({ universe, selected, go, review, reloadAt }: FicheProps) {
       <>
         <span class="path">{t.root}</span>
         <h3>{t.rootTitle}</h3>
+        <PathsBlock paths={paths} scope="" onStudy={onStudy} go={go} />
         <p>{t.summary(stars.filter((s) => s.level > 0).length, stars.filter((s) => s.level === 0).length)}, {t.counts(universe.galaxies.reduce((a, g) => a + g.clusters.length, 0), universe.galaxies.length)}</p>
         {strongest.length > 0 && (
           <div class="blk"><span class="k">{t.strongest}</span>
@@ -59,6 +61,7 @@ function Fiche({ universe, selected, go, review, reloadAt }: FicheProps) {
         <div class="blk"><span class="k">Sous-thèmes</span>
           {g.clusters.map((c) => <button key={c.id} class="worm plain" onClick={() => go(c.id)}>{c.name}<small>{c.stars.length} sujets</small></button>)}
         </div>
+        <PathsBlock paths={paths} scope={g.id} onStudy={onStudy} go={go} />
         <AnkiExport scope={g.id} cards={stars.reduce((a, s) => a + s.cards, 0)} />
         <GalaxySettings key={g.id + JSON.stringify([g.review_after_days, g.discovery])} g={g} />
       </>
@@ -71,6 +74,7 @@ function Fiche({ universe, selected, go, review, reloadAt }: FicheProps) {
         <span class="path">{selected.g.name}</span>
         <h3>{selected.name}</h3>
         <p>{stars.length} sujets · {stars.reduce((a, s) => a + s.data.cards, 0)} cartes</p>
+        <PathsBlock paths={paths} scope={selected.id} onStudy={onStudy} go={go} />
         <div class="blk"><span class="k">{t.byLevel}</span>
           {stars.map((s) => (
             <button key={s.id} class="worm plain" onClick={() => go(s.id)}>
@@ -84,7 +88,7 @@ function Fiche({ universe, selected, go, review, reloadAt }: FicheProps) {
     );
   }
   const starId = selected.kind === "planet" ? selected.star.id : selected.id;
-  return <StarFiche id={starId} planet={selected.kind === "planet" ? selected.name : null} version={universe.version} go={go} review={review} universe={universe} reloadAt={reloadAt} />;
+  return <StarFiche id={starId} planet={selected.kind === "planet" ? selected.name : null} version={universe.version} go={go} review={review} universe={universe} reloadAt={reloadAt} onStudy={onStudy} />;
 }
 
 function PinMap({ universe }: { universe: UniverseView }) {
@@ -159,7 +163,7 @@ function GalaxySettings({ g }: { g: GalaxyView }) {
   );
 }
 
-function StarFiche({ id, planet, version, go, review, universe, reloadAt }: { id: string; planet: string | null; version: number; go: (id: string) => void; review: () => void; universe: UniverseView; reloadAt: (id: string) => Promise<void> }) {
+function StarFiche({ id, planet, version, go, review, universe, reloadAt, onStudy }: { id: string; planet: string | null; version: number; go: (id: string) => void; review: () => void; universe: UniverseView; reloadAt: (id: string) => Promise<void>; onStudy: (path: string, step?: string) => void }) {
   const { t } = useTerms();
   const [star, setStar] = useState<StarView | null>(null);
   const [err, setErr] = useState("");
@@ -216,6 +220,11 @@ function StarFiche({ id, planet, version, go, review, universe, reloadAt }: { id
       {!!star.planets?.length && (
         <div><span class="k">Notions</span>
           <div class="row" style={{ marginTop: "6px" }}>{star.planets.map((p) => <button key={p.id} class="tagn" onClick={() => go(p.id)}>{p.name}</button>)}</div>
+        </div>
+      )}
+      {!!star.steps?.length && (
+        <div><span class="k">Parcours</span>
+          <ul class="instep">{star.steps.map((s) => <li key={`${s.path}/${s.step}`} class={`is-${s.status}`}><button onClick={() => onStudy(s.path, s.step)} title="Ouvrir en mode étude">{s.path_name} · {s.step_name}</button><small>{{ done: "vu", current: "en cours", todo: "à venir" }[s.status]}</small></li>)}</ul>
         </div>
       )}
       {!!star.link_refs?.length && (
